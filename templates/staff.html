@@ -1,0 +1,1284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Network Monitoring Dashboard</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.min.js"></script>
+    <style>
+        :root {
+            --primary-color: #007bff;
+            --light-primary-color: #2f91fa;
+            --secondary-color: #6c757d;
+            --success-color: #28a745;
+            --danger-color: #dc3545;
+            --light-color: #f8f9fa;
+            --dark-color: #343a40;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            background-color: #f4f4f4;
+            min-height: 100vh;
+        }
+        .top-bar {
+            background-color: #cc0000;
+            height: 5px;
+            width: 100%;
+            position: fixed;
+            top: 0;
+            z-index: 1000;
+        }
+
+        .nav-container {
+            background: linear-gradient(to bottom, #333333, #1a1a1a);
+            width: 100%;
+            padding: 10px 0;
+            position: fixed;
+            top: 5px;
+            z-index: 999;
+        }
+
+        .nav-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 20px;
+            color: white;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+        }
+
+        .logo img {
+            height: 53px;
+            margin-right: 15px;
+        }
+
+        .logo h1 {
+            color: white; /* Title color */
+            font-size: 1.5rem; /* Font size */
+            margin: 0; /* Remove default margin */
+            position: absolute; /* Use absolute positioning to center the title */
+            left: 50%; /* Center horizontally */
+            transform: translateX(-50%); /* Adjust for the title's width */
+            top: 50%; /* Vertically align in the nav-content container */
+            transform: translate(-50%, -50%); /* Center in both directions */
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+            margin-top: 90px;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem;
+            background-color: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 2rem;
+        }
+
+        .header h1 {
+            color: var(--dark-color);
+            font-size: 1.5rem;
+        }
+
+        .network-container {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin-bottom: 2rem;
+            position: relative;
+            overflow: auto;
+        }
+
+        #network-diagram {
+            width: 100%;
+            min-height: 600px;
+            position: relative;
+            background: #fafafa;
+            transition: height 0.3s ease;
+            overflow: auto;
+        }
+
+        .network-component {
+            position: absolute;
+            width: 140px;
+            height: 70px;
+            background-color: white;
+            border: 2px solid var(--primary-color);
+            border-radius: 8px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: 600;
+            color: var(--primary-color);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            transition: all 0.2s ease;
+            cursor: pointer;
+            z-index: 2;
+        }
+
+        .network-component:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        }
+
+        .component-connector {
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            background-color: var(--primary-color);
+            border: 2px solid white;
+            border-radius: 50%;
+            z-index: 3;
+        }
+
+        #wire-svg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .connection-line {
+            stroke: var(--dark-color);
+            stroke-width: 2;
+            fill: none;
+            opacity: 0.6;
+            transition: all 0.3s ease;
+        }
+
+        .connection-line:hover {
+            opacity: 1;
+            stroke-width: 3;
+            stroke-dasharray: none;
+        }
+
+        .packet {
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            background-color: var(--success-color);
+            border-radius: 50%;
+            box-shadow: 0 0 8px rgba(40, 167, 69, 0.6);
+            z-index: 4;
+            transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        #message-log {
+            background: white;
+            border-radius: 8px;
+            padding: 1rem;
+            height: 80vh; /* Make it taller */
+            overflow-y: auto;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .log-entry {
+            padding: 1rem;
+            margin-bottom: 1rem;
+            border-left: 4px solid var(--success-color);
+            background-color: #f8f9fa;
+            border-radius: 4px;
+            font-size: 0.95rem;
+            transition: all 0.2s ease;
+        }
+        
+        .log-entry:hover {
+            transform: translateX(5px);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .log-entry:last-child {
+            margin-bottom: 0;
+        }
+
+        .checkpoint {
+            display: inline-block;
+            width: 32px;
+            height: 32px;
+            line-height: 32px;
+            text-align: center;
+            border-radius: 50%;
+            margin: 0 4px;
+            font-size: 0.8rem;
+            font-weight: bold;
+        }
+        
+        .checkpoint.success {
+            background-color: var(--success-color);
+            color: white;
+            box-shadow: 0 2px 4px rgba(40, 167, 69, 0.3);
+        }
+        .checkpoint.failure {
+            background-color: var(--danger-color);
+            color: white;
+        }
+
+        .button-container {
+            display: flex;
+            align-items: center;
+            gap: 10px; /* Ensures consistent spacing between buttons */
+        }
+
+        .toggle-button {
+            padding: 0.5rem 1rem;
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+            font-size: 0.9rem;
+            transition: background-color 0.2s ease;
+        }
+
+        .toggle-button:hover {
+            background-color: var(--light-primary-color);
+        }
+
+        .logout-button {
+            padding: 0.5rem 1rem;
+            background-color: var(--danger-color);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+            font-size: 0.9rem;
+            transition: background-color 0.2s ease;
+        }
+
+        .logout-button:hover {
+            background-color: #c82333;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 10px;
+            }
+
+            .header {
+                flex-direction: column;
+                text-align: center;
+                gap: 1rem;
+            }
+
+            .network-component {
+                width: 120px;
+                height: 60px;
+                font-size: 0.9rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="top-bar"></div>
+    <nav class="nav-container">
+        <div class="nav-content">
+            <div class="logo">
+                <img src="{{ url_for('static', filename='Logo.jpg') }}" alt="Control Technics Logo">
+                <h1>Network Monitoring Dashboard</h1>
+            </div>
+        </div>
+    </nav>
+   
+    <div class="container">
+        <div class="header">
+            <div class="button-container">
+                <button id="toggle-view" class="toggle-button">View Logs</button>
+                <a href="/logout" class="logout-button">Logout</a>
+            </div>
+        </div>
+
+        <div class="network-container">
+            <div id="network-diagram">
+                <svg id="wire-svg" xmlns="http://www.w3.org/2000/svg"></svg>
+            </div>
+        </div>
+
+        <div id="message-log">
+            <h2>Network Activity Log</h2>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        let pathsByEndpoints = new Map();
+        let networkComponents = new Map();
+        let isLogViewActive = false;
+        let refreshInterval;
+        let connections = [];
+
+        function calculateOptimalDiagramSize(components) {
+            if (!components || components.length === 0) {
+                console.error('No components provided for diagram size calculation.');
+                return { minX: 0, maxX: 0, minY: 0, maxY: 0 };
+            }
+            const padding = 120; // Increased padding
+            let minX = Infinity, maxX = -Infinity;
+            let minY = Infinity, maxY = -Infinity;
+
+            components.forEach(comp => {
+                minX = Math.min(minX, comp.x);
+                maxX = Math.max(maxX, comp.x);
+                minY = Math.min(minY, comp.y);
+                maxY = Math.max(maxY, comp.y);
+            });
+
+            // Avoid zero dimensions
+            if (minX === maxX) maxX += 100;
+            if (minY === maxY) maxY += 100;
+
+            return {
+                width: maxX - minX + padding * 2,
+                height: maxY - minY + padding * 2,
+                minX: minX - padding,
+                minY: minY - padding,
+                maxX: maxX + padding,
+                maxY: maxY + padding
+            };
+        }
+
+        function scaleCoordinates(x, y, bounds, containerWidth, containerHeight) {
+            if (!x || !y || !bounds || !containerWidth || !containerHeight) {
+                console.error('Invalid inputs to scaleCoordinates', { x, y, bounds, containerWidth, containerHeight });
+                return { x: 0, y: 0 }; // Return default values to avoid NaN
+            }
+            // Calculate available space (accounting for component size)
+            const availableWidth = containerWidth - 140;
+            const availableHeight = containerHeight - 80;
+
+            // Calculate scale factors
+            const xScale = availableWidth / (bounds.maxX - bounds.minX);
+            const yScale = availableHeight / (bounds.maxY - bounds.minY);
+            
+            // Use the smaller scale factor to maintain aspect ratio
+            const scale = Math.min(xScale, yScale);
+
+            // Center the diagram
+            const scaledWidth = (bounds.maxX - bounds.minX) * scale;
+            const scaledHeight = (bounds.maxY - bounds.minY) * scale;
+            
+            const xOffset = (containerWidth - scaledWidth) / 2;
+            const yOffset = (containerHeight - scaledHeight) / 2;
+
+            return {
+                x: ((x - bounds.minX) * scale) + xOffset,
+                y: ((y - bounds.minY) * scale) + yOffset
+            };
+        }
+
+        async function fetchAndRenderNetwork() {
+            try {
+                const response = await fetch('/api/network_architecture');
+                const data = await response.json();
+                
+                // Clear existing components
+                networkComponents.clear();
+                
+                const diagram = document.getElementById('network-diagram');
+                const wireSvg = document.getElementById('wire-svg');
+        
+                // Clear existing content
+                diagram.innerHTML = '';
+                diagram.appendChild(wireSvg);
+                wireSvg.innerHTML = '';
+        
+                // Calculate optimal size
+                const bounds = calculateOptimalDiagramSize(data.components);
+                const containerWidth = diagram.clientWidth;
+                const containerHeight = Math.max(600, bounds.height + 100);
+                diagram.style.height = `${containerHeight}px`;
+                wireSvg.setAttribute('width', containerWidth);
+                wireSvg.setAttribute('height', containerHeight);
+        
+                // Render components and store them in the Map
+                data.components.forEach(comp => {
+                    const coords = scaleCoordinates(comp.x, comp.y, bounds, containerWidth, containerHeight);
+                    coords.x = Math.max(80, Math.min(containerWidth - 80, coords.x));
+                    coords.y = Math.max(50, Math.min(containerHeight - 50, coords.y));
+        
+                    const component = createNetworkComponent(comp, coords);
+                    diagram.appendChild(component);
+                    
+        
+                    // Store component with its station ID
+                    const stationId = `${comp.id}`;
+                    networkComponents.set(stationId, component);
+                    console.log(`Stored component: ${stationId}`);
+                });
+        
+                // Render connections
+                data.connections.forEach(conn => {
+                    renderConnection(conn, wireSvg, bounds, containerWidth, containerHeight);
+                });
+                
+                // Log stored components for debugging
+                console.log('Network Components Map:', Array.from(networkComponents.entries()));
+                
+            } catch (error) {
+                console.error('Error fetching network architecture:', error);
+            }
+        }
+        function calculateOptimalCheckpointPositionsPerpendicular(start, end, numCheckpoints) {
+            const midX = (start.x + end.x) / 2;
+
+            // Adjust start and end to maintain 80px distance from components
+            const adjustedStart = {
+                x: start.x + 25 * Math.sign(end.x - start.x),
+                y: start.y + 25 * Math.sign(end.y - start.y)
+            };
+            const adjustedEnd = {
+                x: end.x - 25 * Math.sign(end.x - start.x),
+                y: end.y - 25 * Math.sign(end.y - start.y)
+            };
+
+            // Calculate segment lengths with adjusted positions
+            const horizontalDistance1 = Math.abs(midX - adjustedStart.x);
+            const verticalDistance = Math.abs(adjustedEnd.y - adjustedStart.y);
+            const horizontalDistance2 = Math.abs(adjustedEnd.x - midX);
+            const totalDistance = horizontalDistance1 + verticalDistance + horizontalDistance2;
+
+            // Calculate spacing between checkpoints
+            const spacing = totalDistance / (numCheckpoints + 1);
+
+            const checkpoints = [];
+
+            for (let i = 1; i <= numCheckpoints; i++) {
+                const targetDistance = spacing * i;
+
+                if (targetDistance <= horizontalDistance1) {
+                    // Place checkpoint on the first horizontal segment
+                    const deltaX = targetDistance;
+                    checkpoints.push({
+                        x: adjustedStart.x + deltaX * Math.sign(midX - adjustedStart.x),
+                        y: adjustedStart.y
+                    });
+                } else if (targetDistance <= horizontalDistance1 + verticalDistance) {
+                    // Place checkpoint on the vertical segment
+                    const deltaY = targetDistance - horizontalDistance1;
+                    checkpoints.push({
+                        x: midX,
+                        y: adjustedStart.y + deltaY * Math.sign(adjustedEnd.y - adjustedStart.y)
+                    });
+                } else {
+                    // Place checkpoint on the second horizontal segment
+                    const deltaX = targetDistance - (horizontalDistance1 + verticalDistance);
+                    checkpoints.push({
+                        x: midX + deltaX * Math.sign(adjustedEnd.x - midX),
+                        y: adjustedEnd.y
+                    });
+                }
+            }
+
+            return checkpoints;
+        }
+
+
+
+        function renderConnection(conn, wireSvg, bounds, containerWidth, containerHeight) {
+            try {
+                console.log('Rendering Connection:', conn);
+
+                const startCoordCon = getConnectorCoordinates(conn.start, conn.start.connectorPosition);
+                const endCoordCon = getConnectorCoordinates(conn.end, conn.end.connectorPosition);
+
+                if (!startCoordCon || !endCoordCon) {
+                    console.error('Invalid connection coordinates:', conn);
+                    return;
+                }
+
+                const startCoords = scaleCoordinates(startCoordCon.x, startCoordCon.y, bounds, containerWidth, containerHeight);
+                const endCoords = scaleCoordinates(endCoordCon.x, endCoordCon.y, bounds, containerWidth, containerHeight);
+
+                console.log('Scaled Coordinates:', startCoords, endCoords);
+
+                const pathData = createComponentPerpendicularPath(startCoords, endCoords);
+                console.log('Path Data:', pathData);
+
+                //Connections Addition
+                const startComponentId = conn.start.componentId;
+                const endComponentId = conn.end.componentId;
+                const connection = { startComponentId , endComponentId , path: pathData };
+                console.log('Connection made now:', connection);
+                connections.push(connection);
+                console.log('forward full connections:', connections);
+
+                const connection1 = { startComponentId: endComponentId ,endComponentId: startComponentId , path: pathData };
+                console.log('connection made after:', connection1);
+                connections.push(connection1);
+                console.log('Reverse full Connections :', connections);
+
+
+                const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                path.classList.add('connection-line');
+                path.setAttribute('d', pathData);
+                wireSvg.appendChild(path);
+
+                const checkpoints = calculateOptimalCheckpointPositionsPerpendicular(startCoords, endCoords, conn.checkpoints?.length || 0);
+                console.log('Checkpoints:', checkpoints);
+
+                checkpoints.forEach(checkpoint => {
+                    const checkpointElement = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                    checkpointElement.setAttribute('cx', checkpoint.x);
+                    checkpointElement.setAttribute('cy', checkpoint.y);
+                    checkpointElement.setAttribute('r', 6);
+                    checkpointElement.setAttribute('fill', 'var(--primary-color)');
+                    wireSvg.appendChild(checkpointElement);
+                });
+            } catch (error) {
+                console.error('Error rendering connection:', error);
+            }
+        }
+
+
+        function getConnectorCoordinates(component, connectorPosition) {
+            if (!component || !connectorPosition) {
+                console.error('Invalid component or connector position:', { component, connectorPosition });
+                return { x: 0, y: 0 }; // Fallback to avoid NaN
+            }
+            switch (connectorPosition) {
+                case 'top':
+                    return { x: component.x, y: component.y - (component.height || 0) / 2 };
+                case 'right':
+                    return { x: component.x + (component.width || 0) / 2, y: component.y };
+                case 'bottom':
+                    return { x: component.x, y: component.y + (component.height || 0) / 2 };
+                case 'left':
+                    return { x: component.x - (component.width || 0) / 2, y: component.y };
+                default:
+                    console.error(`Unknown connector position: ${connectorPosition}`);
+                    return { x: 0, y: 0 };
+            }
+        }
+
+
+        function createComponentPerpendicularPath(start, end) {
+            const midX = (start.x + end.x) / 2;
+
+            return `
+                M ${start.x},${start.y} 
+                H ${midX} 
+                V ${end.y} 
+                H ${end.x}
+            `.trim();
+        }
+
+
+        function createNetworkComponent(compData, coords) {
+            const component = document.createElement('div');
+            component.classList.add('network-component');
+            component.dataset.type = compData.type;
+            component.textContent = compData.id;
+            component.style.left = `${coords.x - 70}px`;
+            component.style.top = `${coords.y - 35}px`;
+
+            ['top', 'right', 'bottom', 'left'].forEach(position => {
+                const connector = document.createElement('div');
+                connector.classList.add('component-connector');
+                connector.dataset.position = position;
+
+                switch(position) {
+                    case 'top': 
+                        connector.style.top = '-6px';
+                        connector.style.left = '50%';
+                        connector.style.transform = 'translateX(-50%)';
+                        break;
+                    case 'right':
+                        connector.style.right = '-6px';
+                        connector.style.top = '50%';
+                        connector.style.transform = 'translateY(-50%)';
+                        break;
+                    case 'bottom':
+                        connector.style.bottom = '-6px';
+                        connector.style.left = '50%';
+                        connector.style.transform = 'translateX(-50%)';
+                        break;
+                    case 'left':
+                        connector.style.left = '-6px';
+                        connector.style.top = '50%';
+                        connector.style.transform = 'translateY(-50%)';
+                        break;
+                }
+
+                component.appendChild(connector);
+            });
+
+            return component;
+        }
+
+        function calculateControlPoints(start, end, startPos, endPos) {
+            const dx = end.x - start.x;
+            const dy = end.y - start.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            let cp1 = { x: start.x, y: start.y };
+            let cp2 = { x: end.x, y: end.y };
+            
+            const controlPointOffset = Math.min(distance * 0.5, 100);
+        
+            switch (startPos) {
+                case 'right':
+                    cp1.x += controlPointOffset;
+                    break;
+                case 'left':
+                    cp1.x -= controlPointOffset;
+                    break;
+                case 'top':
+                    cp1.y -= controlPointOffset;
+                    break;
+                case 'bottom':
+                    cp1.y += controlPointOffset;
+                    break;
+            }
+        
+            switch (endPos) {
+                case 'right':
+                    cp2.x += controlPointOffset;
+                    break;
+                case 'left':
+                    cp2.x -= controlPointOffset;
+                    break;
+                case 'top':
+                    cp2.y -= controlPointOffset;
+                    break;
+                case 'bottom':
+                    cp2.y += controlPointOffset;
+                    break;
+            }
+        
+            return { cp1, cp2 };
+        }
+        
+        // Function to generate smooth curve through points
+        function generateSmoothPath(points) {
+            if (points.length < 2) return '';
+            
+            let pathData = `M ${points[0].x},${points[0].y}`;
+            
+            if (points.length === 2) {
+                // Simple line for two points
+                pathData += ` L ${points[1].x},${points[1].y}`;
+            } else {
+                // Curved path for multiple points
+                for (let i = 0; i < points.length - 2; i++) {
+                    const xc = (points[i].x + points[i + 1].x) / 2;
+                    const yc = (points[i].y + points[i + 1].y) / 2;
+                    pathData += ` Q ${points[i + 1].x},${points[i + 1].y} ${xc},${yc}`;
+                }
+                // Connect to final point
+                pathData += ` L ${points[points.length - 1].x},${points[points.length - 1].y}`;
+            }
+            
+            return pathData;
+        }
+
+        // Enhanced packet animation function
+        function animatePacketWithCheckpoints(data, pathInfo) {
+            if (!pathInfo) return;
+            
+            const packet = document.createElement('div');
+            packet.classList.add('packet');
+            document.getElementById('network-diagram').appendChild(packet);
+            
+            // Set initial position
+            packet.style.left = `${pathInfo.start.x - 6}px`;
+            packet.style.top = `${pathInfo.start.y - 6}px`;
+            
+            // Animate through checkpoints
+            const totalDuration = 1000; // Total animation time in ms
+            const checkpoints = pathInfo.checkpoints || [];
+            const totalDistance = Math.sqrt(
+                Math.pow(pathInfo.end.x - pathInfo.start.x, 2) +
+                Math.pow(pathInfo.end.y - pathInfo.start.y, 2)
+            );
+            
+            let currentTime = 0;
+            const animationStep = timestamp => {
+                if (!currentTime) currentTime = timestamp;
+                const progress = (timestamp - currentTime) / totalDuration;
+                
+                if (progress < 1) {
+                    // Calculate current position along the path
+                    const currentX = pathInfo.start.x + (pathInfo.end.x - pathInfo.start.x) * progress;
+                    const currentY = pathInfo.start.y + (pathInfo.end.y - pathInfo.start.y) * progress;
+                    
+                    packet.style.left = `${currentX - 6}px`;
+                    packet.style.top = `${currentY - 6}px`;
+                    
+                    // Update checkpoint states
+                    checkpoints.forEach((checkpoint, index) => {
+                        const checkpointElement = document.querySelector(`[data-checkpoint-id="${checkpoint.id}"]`);
+                        if (checkpointElement) {
+                            const checkpointDistance = checkpoint.distances.fromStart;
+                            const currentDistance = progress * totalDistance;
+                            
+                            if (currentDistance >= checkpointDistance) {
+                                checkpointElement.setAttribute('fill', 'var(--success-color)');
+                            }
+                        }
+                    });
+                    
+                    requestAnimationFrame(animationStep);
+                } else {
+                    setTimeout(() => packet.remove(), 100);
+                }
+            };
+            
+            requestAnimationFrame(animationStep);
+        }
+
+/*
+// Get the actual path coordinates between two components
+function getPathCoordinates(sourceComponent, destComponent) {
+    const sourceBounds = sourceComponent.getBoundingClientRect();
+    const destBounds = destComponent.getBoundingClientRect();
+    
+    // Get component centers relative to the network diagram
+    const networkDiagram = document.getElementById('network-diagram');
+    const diagramBounds = networkDiagram.getBoundingClientRect();
+    
+    const start = {
+        x: sourceBounds.left + sourceBounds.width / 2 - diagramBounds.left,
+        y: sourceBounds.top + sourceBounds.height / 2 - diagramBounds.top
+    };
+    
+    const end = {
+        x: destBounds.left + destBounds.width / 2 - diagramBounds.left,
+        y: destBounds.top + destBounds.height / 2 - diagramBounds.top
+    };
+
+    // Calculate midpoint for perpendicular path
+    const midX = (start.x + end.x) / 2;
+
+    // Return the three key points for perpendicular path
+    return {
+        start,
+        mid: { x: midX, y: start.y },
+        midVert: { x: midX, y: end.y },
+        end,
+        checkpoints: [
+            { x: start.x + (midX - start.x) * 0.33, y: start.y },
+            { x: midX, y: start.y + (end.y - start.y) * 0.33 },
+            { x: midX + (end.x - midX) * 0.33, y: end.y }
+        ]
+    };
+}
+
+// Calculate position at given progress along the path
+function calculatePosition(pathPoints, progress) {
+    const { start, mid, midVert, end } = pathPoints;
+    
+    if (progress <= 0.33) {
+        // First segment (horizontal)
+        const p = progress * 3;
+        return {
+            x: start.x + (mid.x - start.x) * p,
+            y: start.y
+        };
+    } else if (progress <= 0.67) {
+        // Second segment (vertical)
+        const p = (progress - 0.33) * 3;
+        return {
+            x: mid.x,
+            y: mid.y + (midVert.y - mid.y) * p
+        };
+    } else {
+        // Third segment (horizontal)
+        const p = (progress - 0.67) * 3;
+        return {
+            x: midVert.x + (end.x - midVert.x) * p,
+            y: end.y
+        };
+    }
+}
+
+function animatePacket(pathInfo, messageData) {
+    const networkDiagram = document.getElementById('network-diagram');
+    const packet = document.createElement('div');
+    packet.classList.add('packet');
+    networkDiagram.appendChild(packet);
+
+    // Get source and destination components
+    const sourceComponent = networkComponents.get(messageData.sender);
+    const destComponent = networkComponents.get(messageData.receiver);
+    
+    if (!sourceComponent || !destComponent) {
+        console.error('Components not found:', messageData.sender, messageData.receiver);
+        return;
+    }
+
+    // Get actual path coordinates
+    const pathPoints = getPathCoordinates(sourceComponent, destComponent);
+    
+    // Animation variables
+    const totalDuration = 6000; // 6 seconds
+    let startTime = null;
+
+    function animate(timestamp) {
+        if (!startTime) startTime = timestamp;
+        const progress = (timestamp - startTime) / totalDuration;
+
+        if (progress < 1) {
+            const pos = calculatePosition(pathPoints, progress);
+            
+            // Update packet position
+            packet.style.left = `${pos.x - 6}px`;
+            packet.style.top = `${pos.y - 6}px`;
+
+            // Emit checkpoint events at specific progress points
+            const checkpointIndex = Math.floor(progress * 4);
+            if (checkpointIndex >= 0 && checkpointIndex < 4) {
+                socket.emit('checkpoint_reached', {
+                    sender: messageData.sender,
+                    receiver: messageData.receiver,
+                    checkpoint: checkpointIndex + 1,
+                    messageId: messageData.messageId
+                });
+            }
+
+            requestAnimationFrame(animate);
+        } else {
+            packet.remove();
+            socket.emit('animation_complete', {
+                sender: messageData.sender,
+                receiver: messageData.receiver,
+                messageId: messageData.messageId
+            });
+        }
+    }
+
+    requestAnimationFrame(animate);
+}
+
+// Update the socket event listener
+socket.on('start_packet_animation', (data) => {
+    console.log('Animation started:', data);
+    
+    // Find the source and destination components
+    const sourceComponent = networkComponents.get(data.sender);
+    const destComponent = networkComponents.get(data.receiver);
+    
+    if (!sourceComponent || !destComponent) {
+        console.error('Components not found:', data.sender, data.receiver);
+        return;
+    }
+
+    animatePacket(null, data); // pathInfo is calculated inside animatePacket now
+});
+*/
+
+// Find path from sender to receiver through intermediate components
+function getPathCoordinates(sourceComponent, destComponent) {
+    const sourceBounds = sourceComponent.getBoundingClientRect();
+    const destBounds = destComponent.getBoundingClientRect();
+    
+    // Get component centers relative to the network diagram
+    const networkDiagram = document.getElementById('network-diagram');
+    const diagramBounds = networkDiagram.getBoundingClientRect();
+    
+    const start = {
+        x: sourceBounds.left + sourceBounds.width / 2 - diagramBounds.left,
+        y: sourceBounds.top + sourceBounds.height / 2 - diagramBounds.top
+    };
+    
+    const end = {
+        x: destBounds.left + destBounds.width / 2 - diagramBounds.left,
+        y: destBounds.top + destBounds.height / 2 - diagramBounds.top
+    };
+
+    // Calculate midpoint for perpendicular path
+    const midX = (start.x + end.x) / 2;
+
+    // Return the three key points for perpendicular path
+    return {
+        start,
+        mid: { x: midX, y: start.y },
+        midVert: { x: midX, y: end.y },
+        end,
+        checkpoints: [
+            { x: start.x + (midX - start.x) * 0.33, y: start.y },
+            { x: midX, y: start.y + (end.y - start.y) * 0.33 },
+            { x: midX + (end.x - midX) * 0.33, y: end.y }
+        ]
+    };
+}
+
+// Calculate position at given progress along the path
+function calculatePosition(pathPoints, progress) {
+    const { start, mid, midVert, end } = pathPoints;
+    
+    if (progress <= 0.33) {
+        // First segment (horizontal)
+        const p = progress * 3;
+        return {
+            x: start.x + (mid.x - start.x) * p,
+            y: start.y
+        };
+    } else if (progress <= 0.67) {
+        // Second segment (vertical)
+        const p = (progress - 0.33) * 3;
+        return {
+            x: mid.x,
+            y: mid.y + (midVert.y - mid.y) * p
+        };
+    } else {
+        // Third segment (horizontal)
+        const p = (progress - 0.67) * 3;
+        return {
+            x: midVert.x + (end.x - midVert.x) * p,
+            y: end.y
+        };
+    }
+}
+function findPath(senderId, receiverId) {
+    const visited = new Set();
+    const queue = [[senderId]]; // BFS queue initialized with the sender
+
+    console.log("Finding path from", senderId, "to", receiverId);
+
+    while (queue.length > 0) {
+        const path = queue.shift(); // Get the current path from the queue
+        const node = path[path.length - 1]; // The last component in the current path
+
+        if (typeof node !== 'string') {
+            console.error("Node is not a string:", node);
+            return null; // Ensure node is a string
+        }
+
+        if (node === receiverId) {
+            console.log("Path found:", path);
+            return path; // Return the path when the receiver is found
+        }
+
+        if (!visited.has(node)) {
+            visited.add(node); // Mark the node as visited
+
+            // Find all neighbors of the current node
+            const neighbors = connections
+                .filter(conn => conn.startComponentId === node) // Ensure correct ID comparison
+                .map(conn => conn.endComponentId);
+
+            console.log("Neighbors of", node, ":", neighbors);
+
+            // Add new paths to the queue for each unvisited neighbor
+            neighbors.forEach(neighbor => {
+                if (!visited.has(neighbor)) {
+                    queue.push([...path, neighbor]);
+                }
+            });
+        }
+    }
+
+    console.error("No path found between", senderId, "and", receiverId);
+    return null; // No path found
+}
+
+
+
+// Get path coordinates for multiple intermediate components
+function getPathCoordinatesForPath(path) {
+    const coordinates = [];
+
+    for (let i = 0; i < path.length - 1; i++) {
+        const sourceComponent = networkComponents.get(path[i]);
+        const destComponent = networkComponents.get(path[i + 1]);
+
+        if (!sourceComponent || !destComponent) {
+            console.error("Component not found:", path[i], path[i + 1]);
+            continue;
+        }
+
+        const segmentCoordinates = getPathCoordinates(sourceComponent, destComponent);
+        coordinates.push(segmentCoordinates);
+    }
+
+    return coordinates;
+}
+
+function animatePacket(path, messageData) {
+    const networkDiagram = document.getElementById('network-diagram');
+    const packet = document.createElement('div');
+    packet.classList.add('packet');
+    networkDiagram.appendChild(packet);
+
+    // Calculate path coordinates
+    const pathCoordinates = getPathCoordinatesForPath(path);
+
+    if (pathCoordinates.length === 0) {
+        console.error("No valid path coordinates for animation");
+        packet.remove();
+        return;
+    }
+
+    const totalSegmentDuration = 3000; // Duration for each segment in ms
+    let currentSegment = 0;
+
+    function animateSegment() {
+        if (currentSegment >= pathCoordinates.length) {
+            // Animation complete
+            packet.remove();
+            socket.emit('animation_complete', {
+                sender: messageData.sender,
+                receiver: messageData.receiver,
+                messageId: messageData.messageId,
+            });
+            return;
+        }
+
+        const segment = pathCoordinates[currentSegment];
+        const { start, mid, midVert, end } = segment;
+
+        // Animate through the three key points
+        const segmentDuration = totalSegmentDuration / 3;
+
+        function animateToPoint(from, to, duration, callback) {
+            const startTime = performance.now();
+
+            function step(timestamp) {
+                const progress = (timestamp - startTime) / duration;
+
+                if (progress < 1) {
+                    const currentX = from.x + (to.x - from.x) * progress;
+                    const currentY = from.y + (to.y - from.y) * progress;
+                    packet.style.left = `${currentX - 6}px`;
+                    packet.style.top = `${currentY - 6}px`;
+                    requestAnimationFrame(step);
+                } else {
+                    packet.style.left = `${to.x - 6}px`;
+                    packet.style.top = `${to.y - 6}px`;
+                    if (callback) callback();
+                }
+            }
+
+            requestAnimationFrame(step);
+        }
+
+        // Sequentially animate through the three segments
+        animateToPoint(start, mid, segmentDuration, () => {
+            animateToPoint(mid, midVert, segmentDuration, () => {
+                animateToPoint(midVert, end, segmentDuration, () => {
+                    currentSegment++;
+                    animateSegment(); // Proceed to the next segment
+                });
+            });
+        });
+    }
+
+    animateSegment();
+}
+
+
+// Updated socket event listener
+socket.on('start_packet_animation', (data) => {
+    console.log('Animation started:', data);
+
+    // Ensure sender and receiver IDs are strings
+    const sourceComponent = networkComponents.get(data.sender);
+    const destComponent = networkComponents.get(data.receiver);
+
+    if (!sourceComponent || !destComponent) {
+        console.error('Components not found:', data.sender, data.receiver);
+        return;
+    }
+
+    // Extract IDs from DOM elements
+    const senderId = sourceComponent.textContent.trim();
+    const receiverId = destComponent.textContent.trim();
+
+    console.log("Resolved IDs:", { senderId, receiverId });
+
+    // Find path between sender and receiver
+    const path = findPath(senderId, receiverId);
+    if (!path) {
+        console.error('No path found between components:', senderId, receiverId);
+        return;
+    }
+
+    console.log('Path found:', path);
+    animatePacket(path, data);
+});
+
+
+
+//Loggs:
+async function fetchExistingLogs() {
+    if (!isLogViewActive) return;
+    
+    try {
+        const response = await fetch('/api/all_logs');
+        if (!response.ok) {
+            throw new Error('Failed to fetch logs');
+        }
+        const logs = await response.json();
+        
+        // Sort logs by timestamp in descending order (newest first)
+        logs.sort((a, b) => {
+            const timeA = new Date(a.timestamp || 0).getTime();
+            const timeB = new Date(b.timestamp || 0).getTime();
+            return timeB - timeA;
+        });
+        
+        // Add all logs (addLogEntry will handle duplicates)
+        logs.forEach(log => {
+            addLogEntry(log, false);
+        });
+    } catch (error) {
+        console.error('Error fetching logs:', error);
+    }
+}
+
+function addLogEntry(data, scrollToTop = true) {
+    const logContainer = document.getElementById('message-log');
+    const entry = document.createElement('div');
+    entry.classList.add('log-entry');
+
+    // Ensure we have a valid timestamp
+    const timestamp = data.timestamp ? new Date(data.timestamp) : new Date();
+    entry.dataset.timestamp = timestamp.getTime(); // Store timestamp for sorting
+    entry.dataset.messageId = data.id || timestamp.getTime(); // Use message ID or timestamp as unique identifier
+
+    const checkpoints = [
+        { status: data.cp1, label: 'CP1' },
+        { status: data.cp2, label: 'CP2' },
+        { status: data.cp3, label: 'CP3' },
+        { status: data.cp4, label: 'CP4' }
+    ];
+
+    const checkpointHtml = checkpoints
+        .map(cp => `<span class="checkpoint ${cp.status ? 'success' : 'failure'}">${cp.label}</span>`)
+        .join(' → ');
+
+    entry.innerHTML = `
+        <strong>Packet Transmitted</strong><br>
+        From: ${data.sender}<br>
+        To: ${data.receiver}<br>
+        Message: ${data.message}<br>
+        Time: ${timestamp.toLocaleString()}<br>
+        Route Status: ${checkpointHtml}
+    `;
+
+    // Check if entry already exists
+    const existingEntry = logContainer.querySelector(`[data-message-id="${entry.dataset.messageId}"]`);
+    if (existingEntry) {
+        existingEntry.innerHTML = entry.innerHTML;
+        return;
+    }
+
+    // Find the correct position to insert the new entry based on timestamp
+    const existingEntries = Array.from(logContainer.getElementsByClassName('log-entry'));
+    const insertPosition = existingEntries.findIndex(existing => {
+        const existingTime = parseInt(existing.dataset.timestamp);
+        return timestamp.getTime() > existingTime;
+    });
+
+    // Insert at the found position or at the beginning if no position found
+    if (insertPosition === -1) {
+        const header = logContainer.querySelector('h2');
+        if (header && header.nextSibling) {
+            logContainer.insertBefore(entry, header.nextSibling);
+        } else {
+            logContainer.appendChild(entry);
+        }
+    } else {
+        logContainer.insertBefore(entry, existingEntries[insertPosition]);
+    }
+
+    // Keep only the latest 100 entries
+    const entries = logContainer.getElementsByClassName('log-entry');
+    while (entries.length > 100) {
+        entries[entries.length - 1].remove();
+    }
+
+    // Scroll to top if needed
+    if (scrollToTop) {
+        logContainer.scrollTop = 0;
+    }
+}
+
+// Update the socket event listener for new messages
+socket.on('new_message', (data) => {
+    if (!data.timestamp) {
+        data.timestamp = new Date().toISOString();
+    }
+    animatePacket(data);
+    addLogEntry(data, true);
+});
+
+// Socket event listeners
+socket.on('connect', () => {
+    console.log('Connected to server');
+    fetchAndRenderNetwork();
+});
+
+socket.on('disconnect', () => {
+    console.log('Disconnected from server');
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+    const toggleButton = document.getElementById('toggle-view');
+    const networkDiagram = document.getElementById('network-diagram');
+    const messageLog = document.getElementById('message-log');
+
+    // Initially hide the logs section
+    messageLog.style.display = 'none';
+    isLogViewActive = false;
+
+    // Set up the toggle button behavior
+    toggleButton.addEventListener('click', async () => {
+        if (networkDiagram.style.display !== 'none') {
+            // Show Logs
+            networkDiagram.style.display = 'none';
+            messageLog.style.display = 'block';
+            toggleButton.textContent = 'View Topology';
+            isLogViewActive = true;
+            
+            // Fetch logs immediately and start refresh interval
+            await fetchExistingLogs();
+            refreshInterval = setInterval(fetchExistingLogs, 5000); // Refresh every 5 seconds
+        } else {
+            // Show Topology
+            networkDiagram.style.display = 'block';
+            messageLog.style.display = 'none';
+            toggleButton.textContent = 'View Logs';
+            isLogViewActive = false;
+            
+            // Clear refresh interval when switching away from logs
+            if (refreshInterval) {
+                clearInterval(refreshInterval);
+            }
+        }
+    });
+
+    // Render the network diagram
+    fetchAndRenderNetwork();
+});
+
+// Clean up interval when page is unloaded
+window.addEventListener('beforeunload', () => {
+    if (refreshInterval) {
+        clearInterval(refreshInterval);
+    }
+});
+    </script>
+</body>
+</html>

@@ -1,0 +1,3124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Network Simulator</title>
+    <link rel="icon" href="data:,">
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+        }
+        html, body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden; /* Ensures no extra scrollbars or gaps at the top of the page */
+        }
+        #top-panel {
+            display: flex;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            background-color: #f0f0f0;
+            padding: 10px;
+            z-index: 9999;
+            align-items: center; /* Centers content vertically */
+            display: flex;
+            flex-wrap: wrap; /* Allows buttons to go to the next row */
+            justify-content: flex-start; /* Aligns buttons to the left */
+            gap: 10px; /* Adds spacing between buttons */
+            margin-top: 10px; /* Adds space below the heading */
+        }
+        h1 {
+            font-size: 20px;
+            color: #333;
+            text-align: center;
+        }
+
+        .main-container {
+            margin-left: 300px; /* Same width as the component panel */
+            margin-top: 50px; /* Space for the fixed top-panel */
+            overflow: hidden;
+        }
+        #component-panel {
+            background-color: #f0f0f0;
+            padding: 15px;
+            overflow-y: auto;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            position: fixed;
+            left: 0;
+            top: 50px; /* Below the top panel */
+            width: 200px; /* Reduced from 500px to 300px */
+            height: calc(100vh - 50px); /* Full height except for the top panel */
+
+            z-index: 9999;
+        }
+        #canvas-container {
+            position: absolute;
+            top: 50px;
+            left: 200px;
+            width: calc(100vw - 200px);
+            height: calc(100vh - 50px);
+            overflow: hidden;
+            background-color: #f0f0f0;
+            border: 2px solid #e0e0e0;
+            transition: width 0.2s ease, height 0.2s ease; /* Add smooth resizing */
+        }
+
+        #canvas-container-wrapper {
+            position: absolute;
+            width: 100000px; /* Large virtual canvas */
+            height: 100000px; /* Large virtual canvas */
+            transform: (0,0); /* Ensures zoom scales from the center */
+            background-color: #f5f5f5;
+        }
+
+        .canvas-connector {
+            position: absolute;
+            transition: background-color 0.3s ease;
+        }
+
+        .canvas-connector:hover {
+            background-color: rgba(0, 0, 255, 0.5);
+        }
+
+        .draggable-component {
+            position: relative;
+            width: 100%;
+            height: auto;
+            background-color: #ffffff;
+            margin-bottom: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s, box-shadow 0.2s;
+            cursor: grab;
+            user-select: none;
+            overflow: hidden;
+            border: 1px solid #e0e0e0;
+        }
+        .draggable-component:hover {
+            transform: scale(1.05);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+            cursor: grabbing;
+        }
+        
+        .draggable-component img {
+            width: 100%;
+            height: auto;
+            object-fit: contain;
+            display: block;
+        }
+        .draggable-component::after {
+            content: attr(data-type);
+            position: absolute;
+            top: 100%;
+            left: 0;
+            width: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 5px;
+            opacity: 0;
+            transition: opacity 0.3s, top 0.3s;
+            text-transform: capitalize;
+        }
+        .draggable-component:hover::after {
+            top: 0;
+            opacity: 1;
+        }
+        .network-component {
+            position: absolute;
+            width: 120px;
+            background-color: white;
+            border: 2px solid #4CAF50;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 10px;
+            cursor: move;
+            user-select: none;
+        }
+        .network-component img {
+            max-width: 100px;
+            max-height: 100px;
+            object-fit: contain;
+            margin-bottom: 10px;
+        }
+        .component-label {
+            font-size: 12px;
+            margin-bottom: 5px;
+            text-align: center;
+        }
+        .connector {
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            background-color: red;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid white;
+            box-shadow: 0 0 5px rgba(0,0,0,0.5);
+            transition: transform 0.2s;
+            z-index: 20; /* Ensure connectors are always on top */
+        }
+        .connector:hover {
+            transform: scale(1.2);
+        }
+        .top-connector { 
+            top: -7px; 
+            left: calc(50% - 6px); 
+        }
+        .bottom-connector { 
+            bottom: -7px; 
+            left: calc(50% - 6px); 
+        }
+        .left-connector { 
+            top: calc(50% - 6px); 
+            left: -7px; 
+        }
+        .right-connector { 
+            top: calc(50% - 6px); 
+            right: -7px; 
+        }
+        #wire-svg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 10;
+            transition: width 0.2s ease, height 0.2s ease; /* Add smooth resizing */
+        }
+
+        #wire-svg path {
+            pointer-events: visibleStroke; /* Enable interaction only with wire strokes */
+        }
+        #wire-svg {
+            background: rgba(0, 0, 0, 0.01); /* Transparent layer for pointer interaction */
+        }
+        .btn {
+            padding: 5px 10px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .btn:hover {
+            background-color: #0056b3;
+        }
+        .connection-point {
+            fill: #007bff;
+        }
+        .priority-input {
+            width: 50px;
+            text-align: center;
+            margin-top: 5px;
+        }
+        .network-component::after {
+            content: attr(data-type);
+            position: absolute;
+            top: -25px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(0,0,0,0.7);
+            color: white;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+        }
+        .network-component:hover::after {
+            opacity: 1;
+        }
+        .selected {
+            border-color: yellow;
+        }
+        #simulation-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+        #simulation-content {
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        .packet {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background-color: red;
+            border-radius: 50%;
+            transition: all 1s linear;
+            z-index: 20;
+        }
+        /*Context Menu*/
+        .context-menu {
+            position: absolute;
+            display: none;
+            background-color: white;
+            border: 1px solid #ccc;
+            z-index: 9999;
+            padding: 10px;
+            box-shadow: 0px 2px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .context-menu ul {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+        }
+
+        .context-menu ul li {
+            padding: 8px 12px;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .context-menu ul li:hover {
+            background-color: #f0f0f0;
+        }
+
+
+        .context-menu ul li:hover {
+            background-color: #f0f0f0;
+        }
+        #delete-btn.active {
+            background-color: red;
+            color: white;
+        }
+        
+        #delete-mode-indicator {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background-color: red;
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            z-index: 1000;
+        }
+        
+        .canvas-connector.selected {
+            background-color: #FF5722;
+        }
+        .component-connector {
+            transition: background-color 0.3s ease;
+        }
+        .component-connector:hover {
+            background-color: rgba(255,0,0,0.5);
+        }
+        .connection-line{
+            fill: none;
+            stroke: #333;
+            stroke-width: 2px;
+            cursor: pointer;
+        }
+        #connector-canvas {
+            position: relative;
+            top: 0;
+            left: 0;
+            width: 100%; /* Adjust dynamically */
+            height: 100%; /* Adjust dynamically */
+            pointer-events: none; /* Let clicks pass through to components */
+            overflow: hidden; /* Prevent visual overflow */
+            cursor: grab; /* Indicate draggable area */
+        }
+        #canvas-container:active {
+            cursor: grabbing; /* Indicate dragging in progress */
+        }
+        #connector-canvas, #wire-svg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            pointer-events: none; /* Ensure interaction passes through */
+        }
+
+        .side-channel-blower-indicator {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            background-color: rgba(0, 123, 255, 0.5);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+            transition: transform 0.1s linear;
+        }
+        
+        .side-channel-blower-indicator::before {
+            content: '';
+            width: 20px;
+            height: 5px;
+            background-color: blue;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+        
+        .side-channel-blower-indicator::after {
+            content: '';
+            width: 5px;
+            height: 20px;
+            background-color: blue;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+        .details-overlay {
+            margin-top: 80px;
+            position: absolute;
+            top: 10px;
+            right: 100px;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 10px;
+            border-radius: 5px;
+            max-width: 250px;
+        }
+        
+        .airflow-arrow {
+            pointer-events: none;
+            opacity: 0.7;
+        }
+
+        .connection-status-display {
+            background-color: #4CAF50;
+            color: white;
+            padding: 8px; 
+            border-radius: 3px;
+            font-size: 16px;     
+            z-index: 1000;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            position: fixed;
+            margin-top: 20px;
+            top: 20px; 
+            right: 10px;
+            white-space: nowrap;       
+        }
+        .wire-checkpoint {
+            cursor: move;
+            transition: width 0.2s ease, height 0.2s ease; /* Add smooth resizing */
+        }
+        .wire-checkpoint.dragging {
+            opacity: 0.7;
+        }
+        .checkpoint-hit {
+            fill: green !important;
+        }
+        .logout-button {
+            padding: 8px 16px;
+            background-color: #f44336;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        .logout-button:hover {
+            background-color: #d32f2f;
+        }
+        .wire-checkpoint,
+        .wire-checkpoint-hitarea {
+            pointer-events: all; /* Ensure elements respond to pointer events */
+        }
+        
+    </style>
+</head>
+<body>
+    <div id="top-panel">
+        <h1 style="margin-right: auto;">Design the Control Topology</h1> <!-- Heading inside panel -->
+        <button id="clear-btn" class="btn">Clear Canvas</button>
+        <button id="save-btn" class="btn">Save Architecture</button>
+        <button id="export-btn" class="btn">Export Text</button>
+        <button id="connect-btn" class="btn">Create Connection</button>
+        <button id="simulate-btn" class="btn">Start Simulation</button>
+        <button onclick="window.location.href='/logout'" id="logout-button" class="btn">Logout</button>
+    </div>
+    
+    <div class="main-container">
+        <div id="component-panel">
+            <div class="draggable-component" draggable="true" data-type="master-control">
+                <img src="{{ url_for('static', filename='MasterControl.png') }}" alt="Master Control">
+            </div>
+            <div class="draggable-component" draggable="true" data-type="passthrough-station">
+                <img src="{{ url_for('static', filename='PassthroughStation.png') }}" alt="Passthrough Station">
+            </div>
+            <div class="draggable-component" draggable="true" data-type="bottom-loading-station">
+                <img src="{{ url_for('static', filename='BottomLoadingStation.png') }}" alt="Bottom Loading Station">
+            </div>
+            <div class="draggable-component" draggable="true" data-type="carrier-diverter-with-tubing">
+                <img src="{{ url_for('static', filename='CarrierDiverterWithTubing.png') }}" alt="Carrier Diverter With Tubing">
+            </div>
+            <div class="draggable-component" draggable="true" data-type="carrier-diverter">
+                <img src="{{ url_for('static', filename='CarrierDiverter.png') }}" alt="Carrier Diverter">
+            </div>
+            <div class="draggable-component" draggable="true" data-type="vfd-controller">
+                <img src="{{ url_for('static', filename='VFDController.png') }}" alt="VFD Controller">
+            </div>
+            <div class="draggable-component" draggable="true" data-type="side-channel-blower">
+                <img src="{{ url_for('static', filename='SideChannelBlower.png') }}" alt="Side Channel Blower">
+            </div>
+        </div>
+        <div id="canvas-container">
+            <div id="canvas-container-wrapper">
+                <canvas id="connector-canvas"></canvas>
+                <svg id="wire-svg" xmlns="http://www.w3.org/2000/svg"></svg>
+            </div>
+        </div>
+    </div>
+
+    <div id="simulation-modal">
+        <div id="simulation-content">
+            <h2>Start Simulation</h2>
+            <label for="start-node">Start Node:</label>
+            <select id="start-node"></select>
+            <label for="end-node">End Node:</label>
+            <select id="end-node"></select>
+            <button id="run-simulation-btn" class="btn">Run Simulation</button>
+            <button id="cancel-simulation-btn" class="btn">Cancel</button>
+        </div>
+    </div>
+    <div class="context-menu" id="context-menu">
+        <ul>
+            <li id="delete-checkpoint" style="display: none;">Delete Checkpoint</li>
+            <li id="delete-item" style="display: none;">Delete Component</li>
+            <li id="rename-item" style="display: none;">Rename Item</li>
+            <li id="change-color" style="display: none;">Change Color</li>
+            <li id="rotate-item" style="display: none;">Rotate</li>
+        </ul>
+    </div>
+    <script>
+        class NetworkSimulator {
+            constructor() {
+                this.components = [];
+                this.undoStack = []; // Stack to store application states
+                this.connections = [];
+                this.isConnectMode = false;
+                this.redoStack = []; // Stack for redo functionality
+                this.movingComponent = null;
+                this.selectedConnector = null;
+                this.canvasContainer = document.getElementById('canvas-container');
+                this.componentConnectors = [];
+                this.wiresLayer = document.getElementById('wire-svg');
+                this.startNodeSelect = document.getElementById('start-node');
+                this.simulationModal = document.getElementById('simulation-modal');
+                this.componentPriorities = new Map();
+                this.endNodeSelect = document.getElementById('end-node');
+                this.isDeleteMode = false;
+                this.connectionCounter = 0;
+                this.componentCounter = {};
+                // Bind methods to ensure `this` context
+                this.saveState = this.saveState.bind(this);
+                this.undo = this.undo.bind(this);
+                this.redo = this.redo.bind(this);
+                this.handleDragStart = this.handleDragStart.bind(this);
+                this.handleDragOver = this.handleDragOver.bind(this);
+                this.handleDrop = this.handleDrop.bind(this);
+
+                //Checkpoint:
+                this.checkpoints = new Map();
+                this.draggedCheckpoint = null;
+                this.globalCheckpointCounter = 0;
+
+                //CanvasWrapper
+                this.scale = 6; // Zoom level
+                this.translateX = 0; // X position for canvas translation
+                this.translateY = 0; // Y position for canvas translation
+                this.canvasWrapper = document.getElementById('canvas-container-wrapper'); // NEW: Reference to wrapper
+
+                //Context Menu
+                this.selectedItem = null;
+                this.contextMenu = document.getElementById('context-menu');
+                this.initCanvas();
+                //Rotation:
+                this.componentRotations = new Map();
+
+                this.addNewButtons();
+                this.initEventListeners();
+            }
+            addNewButtons() {
+                const topPanel = document.getElementById('top-panel');
+                // Undo button
+                const undoBtn = document.createElement('button');
+                undoBtn.id = 'undo-btn';
+                undoBtn.classList.add('btn');
+                undoBtn.textContent = 'Undo';
+                topPanel.appendChild(undoBtn);
+        
+                // Redo button
+                const redoBtn = document.createElement('button');
+                redoBtn.id = 'redo-btn';
+                redoBtn.classList.add('btn');
+                redoBtn.textContent = 'Redo';
+                topPanel.appendChild(redoBtn);
+        
+                // Delete button
+                const deleteBtn = document.createElement('button');
+                deleteBtn.id = 'delete-btn';
+                deleteBtn.classList.add('btn');
+                deleteBtn.textContent = 'Delete';
+                topPanel.appendChild(deleteBtn);
+            }
+    
+            initEventListeners() {
+                // Component Panel Drag Setup
+                document.querySelectorAll('.draggable-component').forEach(component => {
+                    component.addEventListener('dragstart', this.handleDragStart.bind(this));
+                });
+    
+                // Canvas Drop Setup
+                const canvasContainer = document.getElementById('canvas-container');
+                canvasContainer.addEventListener('dragover', this.handleDragOver);
+                canvasContainer.addEventListener('drop', this.handleDrop.bind(this));
+    
+                // Top Panel Buttons
+                document.getElementById('clear-btn').addEventListener('click', this.clearCanvas.bind(this));
+                document.getElementById('save-btn').addEventListener('click', this.saveArchitecture.bind(this));
+                document.getElementById('export-btn').addEventListener('click', this.exportArchitecture.bind(this));
+                document.getElementById('connect-btn').addEventListener('click', this.toggleConnectMode.bind(this));
+                document.getElementById('simulate-btn').addEventListener('click', this.showSimulationModal.bind(this));
+
+                document.getElementById('run-simulation-btn').addEventListener('click', this.runSimulation.bind(this));
+                document.getElementById('cancel-simulation-btn').addEventListener('click', this.hideSimulationModal.bind(this));
+
+                //Context Menu features
+                document.getElementById('delete-item').addEventListener('click', () => this.deleteItem());
+                document.getElementById('rename-item').addEventListener('click', () => this.renameItem());
+                document.getElementById('change-color').addEventListener('click', () => this.changeItemColor());
+                document.getElementById('rotate-item').addEventListener('click', () => this.rotateComponent());
+                document.getElementById('delete-checkpoint').addEventListener('click', () => {
+                    if (this.selectedItem?.classList.contains('wire-checkpoint-group')) {
+                        this.removeCheckpoint(this.selectedItem);
+                    }
+                });
+                document.getElementById('canvas-container').addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
+                    const target = e.target.closest('.wire-checkpoint-group, .network-component');
+                    if (target) {
+                        this.showContextMenu(e, target);
+                    }
+                });
+
+                document.addEventListener('click', (e) => {
+                    const isClickInsideMenu = e.target.closest('.context-menu');
+                    if (!isClickInsideMenu) {
+                        this.contextMenu.style.display = 'none';
+                    }
+                });
+                
+                //super.initEventListeners();
+                document.getElementById('undo-btn').addEventListener('click', this.undo.bind(this));
+                document.getElementById('redo-btn').addEventListener('click', this.redo.bind(this));
+                document.getElementById('delete-btn').addEventListener('click', this.toggleDeleteMode.bind(this));
+                canvasContainer.addEventListener('click', this.handleCanvasClick.bind(this));
+
+                window.addEventListener('resize', this.drawConnectors.bind(this));
+                this.canvasWrapper.addEventListener('mousemove', this.debounce(() => this.redrawConnections(), 50));
+
+                this.drawConnectors();
+
+                document.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                });
+                document.addEventListener('drop', (e) => {
+                    if (!this.draggedJoint) return;
+        
+                    const canvasRect = document.getElementById('canvas-container').getBoundingClientRect();
+                    const x = e.clientX - canvasRect.left;
+                    const y = e.clientY - canvasRect.top;
+        
+                    // Update joint position
+                    this.draggedJoint.joint.style.left = `${x}px`;
+                    this.draggedJoint.joint.style.top = `${y}px`;
+        
+                    // Redraw path with new joint
+                    this.updatePathWithJoints(this.draggedJoint.path);
+        
+                    this.draggedJoint = null;
+
+                });
+
+                //zoom block action
+                // Disable zoom on Ctrl + Mouse Wheel
+                window.addEventListener("wheel", (e) => {
+                if (e.ctrlKey) {
+                    e.preventDefault();
+                }
+                }, { passive: false });
+
+                // Disable zoom on Ctrl + "+" or Ctrl + "-" or "0"
+                window.addEventListener("keydown", (e) => {
+                if ((e.ctrlKey || e.metaKey) && 
+                    (e.key === "+" || e.key === "-" || e.key === "0")) {
+                    e.preventDefault();
+                }
+                });
+
+                // Disable double-tap zoom on mobile
+                let lastTouchEnd = 0;
+                document.addEventListener("touchend", (e) => {
+                const now = new Date().getTime();
+                if (now - lastTouchEnd <= 300) {
+                    e.preventDefault();
+                }
+                lastTouchEnd = now;
+                }, { passive: false });
+
+                //Canvas Wrapper
+                const canvasWrapper = document.getElementById('canvas-container-wrapper');
+                    
+                // Panning functionality
+                let isPanning = false;
+                let panStartX, panStartY;
+
+                this.canvasWrapper.addEventListener('mousedown', (e) => {
+                    isPanning = true;
+                    panStartX = e.clientX - this.translateX;
+                    panStartY = e.clientY - this.translateY;
+                    canvasWrapper.style.cursor = 'grabbing';
+                    this.redrawConnections(); // Ensure connections align with moved components
+
+                });
+
+                this.canvasWrapper.addEventListener('mousemove', (e) => {
+                    if (!isPanning) return;
+
+                    const deltaX = e.clientX - panStartX;
+                    const deltaY = e.clientY - panStartY;
+
+                    this.translateX = deltaX;
+                    this.translateY = deltaY;
+
+                    // Move the canvasWrapper
+                    this.canvasWrapper.style.transform = `translate(${this.translateX}px, ${this.translateY}px)`;
+
+                    // Move the wire layer (SVG)
+                    this.wiresLayer.style.transform = `translate(${this.translateX}px, ${this.translateY}px)`;
+
+                    // Update the position of components relative to the canvas
+                    this.components.forEach(component => {
+                        const currentLeft = parseFloat(component.style.left || 0);
+                        const currentTop = parseFloat(component.style.top || 0);
+
+                        component.style.left = `${currentLeft + deltaX}px`;
+                        component.style.top = `${currentTop + deltaY}px`;
+                    });
+
+                    // ** Move each checkpoint group accordingly **
+                    this.checkpoints.forEach((checkpointGroups) => {
+                        checkpointGroups.forEach(checkpointGroup => {
+                            const checkpoint = checkpointGroup.querySelector('.wire-checkpoint');
+                            const hitArea = checkpointGroup.querySelector('.wire-checkpoint-hitarea');
+                            const label = checkpointGroup.querySelector('text'); // Add reference to checkpoint label
+
+                            const cx = parseFloat(checkpoint.getAttribute('cx')) + deltaX;
+                            const cy = parseFloat(checkpoint.getAttribute('cy')) + deltaY;
+
+                            checkpoint.setAttribute('cx', cx);
+                            checkpoint.setAttribute('cy', cy);
+                            hitArea.setAttribute('cx', cx);
+                            hitArea.setAttribute('cy', cy);
+
+                            if (label) {
+                                label.setAttribute('x', cx); // Align label X position with the checkpoint
+                                label.setAttribute('y', cy - 10); // Offset the Y position for the label
+                            }
+                        });
+                    });
+
+                    panStartX = e.clientX;
+                    panStartY = e.clientY;
+                    this.redrawConnections(); // Ensure connections align with moved components
+                });
+                this.canvasWrapper.addEventListener('mousemove', this.debounce(() => this.drawConnectors(), 50));
+
+                this.canvasWrapper.addEventListener('mouseup', () => {
+                    isPanning = false;
+                    canvasWrapper.style.cursor = 'grab';
+                    this.redrawConnections(); // Ensure connections align with moved components
+
+                });
+
+                this.canvasWrapper.addEventListener('mouseleave', () => {
+                    isPanning = false;
+                    canvasWrapper.style.cursor = 'grab';
+                    this.redrawConnections(); // Ensure connections align with moved components
+
+                });
+
+                // Zoom Logic
+                this.canvasWrapper.addEventListener('wheel', (e) => {
+                    if (e.ctrlKey) {
+                        e.preventDefault();
+                        const zoomFactor = 0.1;
+            
+                        let newScale = this.scale + (e.deltaY < 0 ? zoomFactor : -zoomFactor);
+                        newScale = Math.max(1, Math.min(10, newScale));
+                        this.scale = newScale;
+            
+                        this.canvasWrapper.style.transform = `translate(${this.translateX}px, ${this.translateY}px) scale(${this.scale})`;
+            
+                        this.translateX += 1;
+                        this.translateY += 1;
+                        this.canvasWrapper.style.transform = `translate(${this.translateX}px, ${this.translateY}px)`;
+            
+                        this.translateX -= 1;
+                        this.translateY -= 1;
+                        this.canvasWrapper.style.transform = `translate(${this.translateX}px, ${this.translateY}px)`;
+            
+                        this.components.forEach(comp => {
+                            let scaleTemp = Math.max(0.2, Math.min(6, this.scale - 5));
+                            comp.style.transform = `scale(${scaleTemp})`;
+                        });
+            
+                        this.redrawConnections();
+                    }
+                });
+            }
+            
+
+            captureState() {
+                const state = {
+                    components: this.components.map(comp => ({
+                        id: comp.dataset.id,
+                        type: comp.dataset.type,
+                        position: { left: comp.style.left, top: comp.style.top },
+                        name: comp.dataset.name || '',
+                        color: comp.style.backgroundColor || '',
+                    })),
+                    connections: this.connections.map(conn => ({
+                        startComponentId: conn.start.component.dataset.id,
+                        endComponentId: conn.end.component.dataset.id,
+                        startConnectorPosition: conn.start.connector.dataset.position,
+                        endConnectorPosition: conn.end.connector.dataset.position,
+                        pathData: conn.path.getAttribute('d'),
+                    })),
+                    checkpoints: Array.from(this.checkpoints.entries()).map(([path, checkpointGroups]) => ({
+                        pathData: path.getAttribute('d'),
+                        checkpoints: checkpointGroups.map(cpGroup => {
+                            const checkpoint = cpGroup.querySelector('.wire-checkpoint');
+                            return {
+                                cx: parseFloat(checkpoint.getAttribute('cx')),
+                                cy: parseFloat(checkpoint.getAttribute('cy')),
+                                checkpointId: cpGroup.getAttribute('data-checkpoint-id'),
+                            };
+                        })
+                    })),
+                    isConnectMode: this.isConnectMode,
+                    isDeleteMode: this.isDeleteMode,
+                };
+                return state;
+            }
+
+            // Restore a previously captured state
+            restoreState(state) {
+                const existingComponents = new Map(this.components.map(comp => [comp.dataset.id, comp]));
+
+                // Update or add components
+                state.components.forEach(compState => {
+                    let component = existingComponents.get(compState.id);
+                    if (!component) {
+                        // Component not found, create a new one
+                        component = this.createNetworkComponent(compState.type, 0, 0);
+                        this.canvasContainer.appendChild(component);
+                        this.addConnectorsToComponent(component);
+                        this.addDraggableFunctionality(component);
+                    }
+                    // Update properties
+                    component.style.left = compState.position.left;
+                    component.style.top = compState.position.top;
+                    component.dataset.name = compState.name || '';
+                    component.style.backgroundColor = compState.color || '';
+                });
+
+                // Remove components no longer in state
+                this.components.forEach(existingComp => {
+                    if (!state.components.some(compState => compState.id === existingComp.dataset.id)) {
+                        this.canvasContainer.removeChild(existingComp);
+                    }
+                });
+
+                // Update connections
+                const existingConnections = new Set(this.connections.map(conn => JSON.stringify({
+                    startId: conn.start.component.dataset.id,
+                    endId: conn.end.component.dataset.id,
+                    startPos: conn.start.connector.dataset.position,
+                    endPos: conn.end.connector.dataset.position,
+                })));
+
+                state.connections.forEach(connState => {
+                    const connKey = JSON.stringify({
+                        startId: connState.startComponentId,
+                        endId: connState.endComponentId,
+                        startPos: connState.startConnectorPosition,
+                        endPos: connState.endConnectorPosition,
+                    });
+
+                    if (!existingConnections.has(connKey)) {
+                        // Connection not found, create a new one
+                        const startComponent = this.components.find(comp => comp.dataset.id === connState.startComponentId);
+                        const endComponent = this.components.find(comp => comp.dataset.id === connState.endComponentId);
+
+                        if (startComponent && endComponent) {
+                            const startConnector = Array.from(startComponent.querySelectorAll('.connector'))
+                                .find(conn => conn.dataset.position === connState.startConnectorPosition);
+                            const endConnector = Array.from(endComponent.querySelectorAll('.connector'))
+                                .find(conn => conn.dataset.position === connState.endConnectorPosition);
+
+                            if (startConnector && endConnector) {
+                                const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+                                path.setAttribute('class', 'connection-line');
+                                path.setAttribute('stroke', '#007bff');
+                                path.setAttribute('stroke-width', '3');
+                                path.setAttribute('fill', 'none');
+                                path.setAttribute('d', connState.pathData);
+                                this.wiresLayer.appendChild(path);
+
+                                this.connections.push({
+                                    start: { component: startComponent, connector: startConnector },
+                                    end: { component: endComponent, connector: endConnector },
+                                    path,
+                                });
+                            }
+                        }
+                    }
+                });
+
+                // Restore checkpoints
+                const newCheckpoints = new Map();
+                state.checkpoints.forEach(({ pathData, checkpoints }) => {
+                    const connectionPath = Array.from(this.wiresLayer.querySelectorAll('path'))
+                        .find(path => path.getAttribute('d') === pathData);
+
+                    if (connectionPath) {
+                        const checkpointGroups = [];
+                        checkpoints.forEach(({ cx, cy, checkpointId }) => {
+                            const existingCheckpoint = this.wiresLayer.querySelector(`[data-checkpoint-id="${checkpointId}"]`);
+                            if (!existingCheckpoint) {
+                                const checkpointGroup = this.addCheckpointToWire(connectionPath, cx, cy);
+                                checkpointGroup.setAttribute('data-checkpoint-id', checkpointId);
+                                checkpointGroups.push(checkpointGroup);
+                            } else {
+                                checkpointGroups.push(existingCheckpoint);
+                            }
+                        });
+                        newCheckpoints.set(connectionPath, checkpointGroups);
+                    }
+                });
+
+                // Remove extra checkpoints that are not part of the new state
+                this.checkpoints.forEach((checkpointGroups, path) => {
+                    if (!newCheckpoints.has(path)) {
+                        checkpointGroups.forEach(checkpointGroup => this.wiresLayer.removeChild(checkpointGroup));
+                    }
+                });
+
+                this.checkpoints = newCheckpoints;
+
+
+                // Remove extra connections
+                this.connections = this.connections.filter(conn => {
+                    const connKey = JSON.stringify({
+                        startId: conn.start.component.dataset.id,
+                        endId: conn.end.component.dataset.id,
+                        startPos: conn.start.connector.dataset.position,
+                        endPos: conn.end.connector.dataset.position,
+                    });
+
+                    if (!state.connections.some(connState => {
+                        return JSON.stringify({
+                            startId: connState.startComponentId,
+                            endId: connState.endComponentId,
+                            startPos: connState.startConnectorPosition,
+                            endPos: connState.endConnectorPosition,
+                        }) === connKey;
+                    })) {
+                        this.wiresLayer.removeChild(conn.path);
+                        return false;
+                    }
+                    return true;
+                });
+
+                // Ensure paths are redrawn
+                this.redrawConnections();
+            }
+
+    // Save current state to undo stack
+    saveState() {
+        const currentState = this.captureState();
+
+        const isDuplicate = this.undoStack.length > 0 && JSON.stringify(this.undoStack[this.undoStack.length - 1]) === JSON.stringify(currentState);
+
+        if (!isDuplicate) {
+            this.undoStack.push(currentState);
+
+            // Limit stack size
+            if (this.undoStack.length > 20) this.undoStack.shift();
+
+            // Clear redo stack on a new action
+            this.redoStack = [];
+        }
+    }
+
+    undo() {
+        if (this.undoStack.length > 0) {
+            const prevState = this.undoStack.pop();
+            
+            // Check if there are connections to be deleted
+            const currentConnections = this.connections.length;
+            const prevConnections = prevState.connections.length;
+            
+            // If connections will be deleted, ask for confirmation
+            if (currentConnections > prevConnections) {
+                const confirmUndo = window.confirm(`This undo will delete ${currentConnections - prevConnections} connection(s). Do you want to proceed?`);
+                
+                if (!confirmUndo) {
+                    // If user cancels, push back the state and return
+                    this.undoStack.push(prevState);
+                    return;
+                }
+            }
+            
+            // Capture current state for redo (but disable redo for connections)
+            const currentState = this.captureState();
+            this.redoStack.push(currentState); // Save current state before restoring
+            
+            // Restore previous state
+            this.restoreState(prevState);
+            console.log("Undo successful");
+        } else {
+            console.log("Nothing to undo");
+        }
+    }
+
+    redo() {
+        if (this.redoStack.length > 0) {
+            const nextState = this.redoStack.pop();
+            this.undoStack.push(this.captureState()); // Save current state before restoring
+            this.restoreState(nextState); // Restore to next state
+            console.log("Redo successful");
+        } else {
+            console.log("Nothing to redo");
+        }
+    }
+
+    toggleDeleteMode() {
+        this.isDeleteMode = !this.isDeleteMode;
+        const deleteBtn = document.getElementById('delete-btn');
+        const deleteModeIndicator = document.getElementById('delete-mode-indicator');
+    
+        // Toggle active class on delete button
+        deleteBtn.classList.toggle('active');
+    
+        if (this.isDeleteMode) {
+            // Visual indication of delete mode
+            deleteBtn.style.backgroundColor = 'red';
+            deleteBtn.style.color = 'white';
+    
+            // Create or show a mode indicator
+            if (!deleteModeIndicator) {
+                const indicator = document.createElement('div');
+                indicator.id = 'delete-mode-indicator';
+                indicator.style.position = 'fixed';
+                indicator.style.top = '10px';
+                indicator.style.right = '10px';
+                indicator.style.backgroundColor = 'red';
+                indicator.style.color = 'white';
+                indicator.style.padding = '10px';
+                indicator.style.borderRadius = '5px';
+                indicator.style.zIndex = '1000';
+                indicator.textContent = 'DELETE MODE ACTIVE';
+                document.body.appendChild(indicator);
+            } else {
+                deleteModeIndicator.style.display = 'block';
+            }
+    
+            console.log("Delete mode activated.");
+            // Optionally change cursor to indicate delete mode
+            document.getElementById('canvas-container').style.cursor = 'crosshair';
+        } else {
+            // Reset delete button style
+            deleteBtn.style.backgroundColor = '';
+            deleteBtn.style.color = '';
+    
+            // Hide or remove delete mode indicator
+            if (deleteModeIndicator) {
+                deleteModeIndicator.style.display = 'none';
+            }
+    
+            console.log("Delete mode deactivated.");
+            // Reset cursor
+            document.getElementById('canvas-container').style.cursor = 'default';
+        }
+    }
+    handleCanvasClick(e) {
+        this.saveState();
+        if (!this.isDeleteMode) return;
+
+        const clickedCheckpoint = e.target.closest('.wire-checkpoint-group');
+        if (clickedCheckpoint) {
+            this.removeCheckpoint(clickedCheckpoint);
+            console.log("Checkpoint deleted in delete mode.");
+            return; // Exit after checkpoint deletion
+        }
+
+        const clickedComponent = e.target.closest('.network-component');
+        const clickedConnection = e.target.closest('.connection-line');
+
+        if (clickedComponent) {
+            this.deleteComponent(clickedComponent);
+        } else if (clickedConnection) {
+            this.deleteConnection(clickedConnection);
+        }
+    }
+
+    getImageSrc(componentType) {
+        const imageSources = {
+            'master-control': '/static/MasterControl.png',
+            'passthrough-station': '/static/PassthroughStation.png', // Check this path
+            'bottom-loading-station': '/static/BottomLoadingStation.png',
+            'carrier-diverter-with-tubing': '/static/CarrierDiverterWithTubing.png',
+            'carrier-diverter': '/static/CarrierDiverter.png',
+            'vfd-controller': '/static/VFDController.png',
+            'side-channel-blower': '/static/SideChannelBlower.png'
+        };
+
+        if (!imageSources[componentType]) {
+            console.warn('Image not found for component type:', componentType);
+            return '/static/default-component.png'; // Ensure this path is valid
+        }
+
+        return imageSources[componentType];
+    }
+    formatComponentName(componentType) {
+              // Convert kebab-case to Title Case
+                return componentType
+                    .split('-')
+                    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                    .join(' ');
+    }
+            handleDragStart(e) {
+                const component = e.currentTarget.closest('.draggable-component');
+                const type = component?.dataset.type;
+                const imgSrc = component.querySelector('img').src;
+
+                console.log('Dragging component type:', type);
+                console.log('Image source:', imgSrc);
+
+                if (!type) {
+                    console.error('Component missing data-type');
+                    return;
+                }
+
+                e.dataTransfer.setData('text/plain', type);
+                e.dataTransfer.effectAllowed = 'copy';
+                console.log('Dragging component type:', type);
+
+            }
+            handleDragOver(e) {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'copy';
+            }
+
+            handleDrop(e) {
+                e.preventDefault();
+                const componentType = e.dataTransfer.getData('text/plain');
+                if (!componentType || this.movingComponent) {
+                    console.error('No component type found in drop event');
+                    return;
+                }
+                const canvasContainer = document.getElementById('canvas-container');
+                const canvasRect = canvasContainer.getBoundingClientRect();
+                const x = (e.clientX - canvasRect.left);
+                const y = (e.clientY - canvasRect.top );
+
+                // Ensure components are only placed within the canvas
+                if (x < 0 || y < 0) return;
+
+                // Dynamically adjust the size of the canvas container
+                const padding = 200; // Allow some extra space for dynamic resizing
+                if (x + padding > canvasContainer.scrollWidth) {
+                    canvasContainer.style.width = `${x + padding}px`;
+                }
+                if (y + padding > canvasContainer.scrollHeight) {
+                    canvasContainer.style.height = `${y + padding}px`;
+                }
+
+                if (this.movingComponent) {
+                    // Moving an existing component
+                    this.movingComponent.style.left = `${x - this.movingComponent.offsetWidth / 2}px`;
+                    this.movingComponent.style.top = `${y - this.movingComponent.offsetHeight / 2}px`;
+                    this.redrawConnections();
+                    this.movingComponent = null;
+                    this.saveState();
+                    return;
+                }
+
+                // Creating a new component
+                if (componentType) {
+                    this.createNetworkComponent(componentType, x, y);
+                    this.saveState();
+                }
+                console.log(`Dropped component of type: ${componentType} at (${x}, ${y})`);
+            }
+
+            toggleConnectMode() {
+                this.isConnectMode = !this.isConnectMode;
+                const connectBtn = document.getElementById('connect-btn');
+                const connectionStatusDisplay = document.getElementById('connection-status');
+                
+                connectBtn.classList.toggle('active');
+                
+                if (this.isConnectMode) {
+                    // Create and show connection status display
+                    if (!connectionStatusDisplay) {
+                        const statusDisplay = document.createElement('div');
+                        statusDisplay.id = 'connection-status';
+                        statusDisplay.classList.add('connection-status-display');
+                        statusDisplay.textContent = 'Connecting enabled';
+                        
+                        // Position it near the connect button
+                        statusDisplay.style.position = 'absolute';
+                        statusDisplay.style.top = `${connectBtn.offsetTop + connectBtn.offsetHeight + 5}px`;
+                        statusDisplay.style.left = `${connectBtn.offsetLeft}px`;
+                        
+                        document.body.appendChild(statusDisplay);
+                    } else {
+                        connectionStatusDisplay.style.display = 'block';
+                    }
+                } else {
+                    // Hide connection status display if it exists
+                    const connectionStatusDisplay = document.getElementById('connection-status');
+                    if (connectionStatusDisplay) {
+                        connectionStatusDisplay.style.display = 'none';
+                    }
+                }
+                
+                this.saveState();
+            }
+            configureSideChannelBlower(blowerComponent) {
+                // Add specific attributes to the blower component
+                blowerComponent.dataset.componentType = 'side-channel-blower';
+                
+                // Create configuration object for the blower
+                const blowerConfig = {
+                    type: 'side-channel-blower',
+                    motorType: null, // Can be '3-phase' or 'single-phase'
+                    vfdCompatible: true,
+                    inletStatus: 'closed',
+                    outletStatus: 'closed',
+                    airflowRate: 0, // m³/h
+                    pressure: 0, // kPa
+                    maxPressure: 50, // Example max pressure
+                    maxAirflowRate: 100 // Example max airflow
+                };
+        
+                // Add VFD configuration option
+                const vfdToggle = document.createElement('input');
+                vfdToggle.type = 'checkbox';
+                vfdToggle.classList.add('vfd-toggle');
+                vfdToggle.title = 'Enable VFD Control';
+                
+                // Motor type selector
+                const motorTypeSelect = document.createElement('select');
+                motorTypeSelect.classList.add('motor-type-select');
+                const options = [
+                    { value: '3-phase', label: '3-Phase Motor' },
+                    { value: 'single-phase', label: 'Single-Phase Motor' }
+                ];
+                options.forEach(opt => {
+                    const optElement = document.createElement('option');
+                    optElement.value = opt.value;
+                    optElement.textContent = opt.label;
+                    motorTypeSelect.appendChild(optElement);
+                });
+        
+                // Airflow control
+                const airflowSlider = document.createElement('input');
+                airflowSlider.type = 'range';
+                airflowSlider.min = 0;
+                airflowSlider.max = 100;
+                airflowSlider.value = 0;
+                airflowSlider.classList.add('airflow-slider');
+                airflowSlider.title = 'Airflow Rate Control';
+        
+                // Event listeners for configuration
+                vfdToggle.addEventListener('change', (e) => {
+                    blowerConfig.vfdCompatible = e.target.checked;
+                });
+        
+                motorTypeSelect.addEventListener('change', (e) => {
+                    blowerConfig.motorType = e.target.value;
+                });
+        
+                airflowSlider.addEventListener('input', (e) => {
+                    blowerConfig.airflowRate = parseInt(e.target.value);
+                    // Adjust pressure based on airflow
+                    blowerConfig.pressure = (blowerConfig.airflowRate / 100) * blowerConfig.maxPressure;
+                });
+        
+                // Append configuration elements
+                blowerComponent.appendChild(vfdToggle);
+                blowerComponent.appendChild(motorTypeSelect);
+                blowerComponent.appendChild(airflowSlider);
+        
+                // Store configuration on the component
+                blowerComponent.blowerConfig = blowerConfig;
+        
+                return blowerComponent;
+            }
+        
+            // Method to handle buffer functionality
+            configureBufferComponent(bufferComponent) {
+                // Add buffer-specific attributes
+                bufferComponent.dataset.componentType = 'buffer';
+                
+                // Create buffer configuration object
+                const bufferConfig = {
+                    type: 'buffer',
+                    capacity: 10, // Default capacity
+                    currentOccupancy: 0,
+                    status: 'empty', // can be 'empty', 'partial', 'full'
+                    allowedComponentTypes: [
+                        'passthrough-station', 
+                        'bottom-loading-station', 
+                        'carrier-diverter', 
+                        'carrier-diverter-with-tubing'
+                    ]
+                };
+        
+                // Capacity input
+                const capacityInput = document.createElement('input');
+                capacityInput.type = 'number';
+                capacityInput.min = 1;
+                capacityInput.max = 50;
+                capacityInput.value = bufferConfig.capacity;
+                capacityInput.classList.add('buffer-capacity');
+                capacityInput.title = 'Buffer Capacity';
+        
+                // Occupancy display
+                const occupancyDisplay = document.createElement('div');
+                occupancyDisplay.classList.add('buffer-occupancy');
+                occupancyDisplay.textContent = `0/${bufferConfig.capacity}`;
+        
+                // Event listener for capacity changes
+                capacityInput.addEventListener('change', (e) => {
+                    const newCapacity = parseInt(e.target.value);
+                    bufferConfig.capacity = newCapacity;
+                    occupancyDisplay.textContent = `${bufferConfig.currentOccupancy}/${newCapacity}`;
+                });
+        
+                // Method to update buffer occupancy
+                bufferComponent.updateOccupancy = (change) => {
+                    bufferConfig.currentOccupancy = Math.max(0, 
+                        Math.min(bufferConfig.capacity, 
+                            bufferConfig.currentOccupancy + change)
+                    );
+        
+                    // Update status
+                    if (bufferConfig.currentOccupancy === 0) {
+                        bufferConfig.status = 'empty';
+                    } else if (bufferConfig.currentOccupancy === bufferConfig.capacity) {
+                        bufferConfig.status = 'full';
+                    } else {
+                        bufferConfig.status = 'partial';
+                    }
+        
+                    // Update display
+                    occupancyDisplay.textContent = `${bufferConfig.currentOccupancy}/${bufferConfig.capacity}`;
+                    
+                    return bufferConfig.status;
+                };
+        
+                // Append configuration elements
+                bufferComponent.appendChild(capacityInput);
+                bufferComponent.appendChild(occupancyDisplay);
+        
+                // Store configuration on the component
+                bufferComponent.bufferConfig = bufferConfig;
+        
+                return bufferComponent;
+            }
+            
+            createNetworkComponent(componentType, x, y) {
+                const component = super.createNetworkComponent(componentType, x, y);
+                
+                // Add special configuration based on component type
+                switch(componentType) {
+                    case 'side-channel-blower':
+                        return this.configureSideChannelBlower(component);
+                    case 'passthrough-station':
+                    case 'bottom-loading-station':
+                    case 'carrier-diverter':
+                    case 'carrier-diverter-with-tubing':
+                        return this.configureBufferComponent(component);
+                    default:
+                        return component;
+                }
+            }
+            
+            createNetworkComponent(componentType, x, y) {
+                if (!componentType) {
+                    console.error('Invalid component type:', componentType);
+                    return;
+                }
+    
+                // Increment counter for this component type
+                this.componentCounter[componentType] = 
+                    (this.componentCounter[componentType] || 0) + 1;
+                // Create unique identifier
+                const componentId = `${componentType}-${this.componentCounter[componentType]}`;
+                
+                const component = document.createElement('div');
+                component.classList.add('network-component', componentType);
+                component.dataset.type = componentType;
+                component.dataset.id = componentId;
+                
+                // Create image element
+                const img = document.createElement('img');
+                img.src = this.getImageSrc(componentType);
+                img.alt = this.formatComponentName(componentType);
+                
+                // Create label for component
+                const label = document.createElement('div');
+                label.classList.add('component-label');
+                label.textContent = `${this.formatComponentName(componentType)} #${this.componentCounter[componentType]}`;
+                
+                // Create priority selector
+                const priorityInput = document.createElement('input');
+                priorityInput.type = 'number';
+                priorityInput.classList.add('priority-input');
+                priorityInput.value = this.components.length + 1; // Default priority
+                priorityInput.min = 1;
+                
+                component.appendChild(img);
+                component.appendChild(label);
+                component.appendChild(priorityInput);
+                
+                // Position the component
+                component.style.position = 'absolute';
+                component.style.left = `${x}px`;
+                component.style.top = `${y}px`;
+                
+                // Add to canvas
+                const canvasContainer = document.getElementById('canvas-container');
+                this.canvasContainer.appendChild(component);
+                
+                this.addConnectorsToComponent(component);
+                // Add draggable functionality
+                this.addDraggableFunctionality(component);
+                
+                // Store component reference
+                this.components.push(component);
+                console.log(`Component ${componentType} created at (${x}, ${y})`);
+                
+                return component;
+            }
+
+            setPriority(component, priority) {
+                this.componentPriorities.set(component.id, priority);
+            }
+
+            initCanvas() {
+                this.drawConnectors();
+                const debouncedDraw = this.debounce(() => this.drawConnectors(), 50);
+                window.addEventListener('resize', debouncedDraw);
+            }
+
+            drawConnectors() {
+                const canvas = document.getElementById('connector-canvas');
+                const ctx = canvas.getContext('2d');
+                canvas.width = this.canvasContainer.scrollWidth;
+                canvas.height = this.canvasContainer.scrollHeight;
+                
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                // Example of improved visibility and positioning
+                ctx.fillStyle = 'rgba(0, 0, 255, 0.5)';
+                this.components.forEach(comp => {
+                    const rect = comp.getBoundingClientRect();
+                    ctx.beginPath();
+                    ctx.arc(rect.left + rect.width / 2, rect.top + rect.height / 2, 5, 0, 2 * Math.PI);
+                    ctx.fill();
+                });
+            }
+
+            debounce(func, wait) {
+                let timeout;
+                return function (...args) {
+                    const context = this;
+                    clearTimeout(timeout);
+                    timeout = setTimeout(() => func.apply(context, args), wait);
+                };
+            }            
+            handleCanvasConnectorClick(e) {
+                if (!this.isConnectMode) return;
+        
+                const connector = e.target;
+                
+                if (!this.selectedConnector) {
+                    this.selectedConnector = { 
+                        connector, 
+                        component: document.getElementById('canvas-container') 
+                    };
+                    connector.classList.add('selected');
+                } else {
+                    // Prevent connecting to the same canvas connector
+                    if (this.selectedConnector.component === document.getElementById('canvas-container')) {
+                        this.selectedConnector.connector.classList.remove('selected');
+                        this.selectedConnector = null;
+                        return;
+                    }
+        
+                    this.createCanvasConnection(this.selectedConnector, { 
+                        connector, 
+                        component: document.getElementById('canvas-container') 
+                    });
+        
+                    this.selectedConnector.connector.classList.remove('selected');
+                    this.selectedConnector = null;
+                }
+            }
+            
+          /*  addCheckpointToWire(connectionPath, x, y) {
+                this.saveState();
+            
+                // Create a checkpoint element group
+                const checkpointGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
+                checkpointGroup.setAttribute('class', 'wire-checkpoint-group');
+            
+                // Increment the global checkpoint counter to ensure unique IDs
+                this.globalCheckpointCounter++;
+                const checkpointId = `checkpoint-${this.globalCheckpointCounter}`;
+                checkpointGroup.setAttribute('data-checkpoint-id', checkpointId);
+            
+                // Create a larger hit area
+                const hitArea = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+                hitArea.setAttribute('r', '10');
+                hitArea.setAttribute('fill', 'transparent');
+                hitArea.setAttribute('class', 'wire-checkpoint-hitarea');
+            
+                // Create the visible checkpoint
+                const checkpoint = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+                checkpoint.setAttribute('r', '5');
+                checkpoint.setAttribute('class', 'wire-checkpoint');
+                checkpoint.setAttribute('fill', 'red');
+                checkpoint.setAttribute('stroke', 'black');
+                checkpoint.setAttribute('stroke-width', '2');
+            
+                // **Snap the checkpoint to the closest point on the path**
+                const closestPoint = this.getClosestPointOnPath(connectionPath, x, y);
+                checkpoint.setAttribute('cx', closestPoint.x);
+                checkpoint.setAttribute('cy', closestPoint.y);
+                hitArea.setAttribute('cx', closestPoint.x);
+                hitArea.setAttribute('cy', closestPoint.y);
+            
+                // Add checkpoint ID text
+                const checkpointLabel = document.createElementNS("http://www.w3.org/2000/svg", "text");
+                checkpointLabel.setAttribute('x', closestPoint.x);
+                checkpointLabel.setAttribute('y', closestPoint.y - 10);
+                checkpointLabel.setAttribute('text-anchor', 'middle');
+                checkpointLabel.setAttribute('font-size', '10');
+                checkpointLabel.textContent = checkpointId;
+            
+                // Combine elements
+                checkpointGroup.appendChild(hitArea);
+                checkpointGroup.appendChild(checkpoint);
+                checkpointGroup.appendChild(checkpointLabel);
+            
+                // Add context menu for checkpoint
+                checkpointGroup.addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
+                    // Remove checkpoint on right-click
+                    this.removeCheckpoint(checkpointGroup);
+                });
+            
+                // Make the checkpoint draggable
+                const dragHandler = this.startCheckpointDrag.bind(this);
+                hitArea.addEventListener('mousedown', dragHandler);
+                checkpoint.addEventListener('mousedown', dragHandler);
+            
+                // Add the checkpoint to the SVG layer
+                this.wiresLayer.appendChild(checkpointGroup);
+        
+                // Add this line to ensure the checkpoint renders on top
+                checkpointGroup.parentNode.appendChild(checkpointGroup);
+            
+                // Store the checkpoint reference
+                if (!this.checkpoints.has(connectionPath)) {
+                    this.checkpoints.set(connectionPath, []);
+                }
+                this.checkpoints.get(connectionPath).push(checkpointGroup);
+            
+                this.saveState();
+                return checkpointGroup;
+            }*/
+            addCheckpointToWire(connectionPath, x, y) {
+                this.saveState();
+            
+                // Create a checkpoint element group
+                const checkpointGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
+                checkpointGroup.setAttribute('class', 'wire-checkpoint-group');
+            
+                // Increment the global checkpoint counter to ensure unique IDs
+                this.globalCheckpointCounter++;
+                const checkpointId = `checkpoint-${this.globalCheckpointCounter}`;
+                checkpointGroup.setAttribute('data-checkpoint-id', checkpointId);
+            
+                // Create a larger hit area
+                const hitArea = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+                hitArea.setAttribute('r', '10');
+                hitArea.setAttribute('fill', 'transparent');
+                hitArea.setAttribute('class', 'wire-checkpoint-hitarea');
+            
+                // Create the visible checkpoint
+                const checkpoint = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+                checkpoint.setAttribute('r', '5');
+                checkpoint.setAttribute('class', 'wire-checkpoint');
+                checkpoint.setAttribute('fill', 'red');
+                checkpoint.setAttribute('stroke', 'black');
+                checkpoint.setAttribute('stroke-width', '2');
+            
+                // Snap the checkpoint to the closest point on the path
+                const closestPoint = this.getClosestPointOnPath(connectionPath, x, y);
+                checkpoint.setAttribute('cx', closestPoint.x);
+                checkpoint.setAttribute('cy', closestPoint.y);
+                hitArea.setAttribute('cx', closestPoint.x);
+                hitArea.setAttribute('cy', closestPoint.y);
+            
+                // Add checkpoint ID text
+                const checkpointLabel = document.createElementNS("http://www.w3.org/2000/svg", "text");
+                checkpointLabel.setAttribute('x', closestPoint.x);
+                checkpointLabel.setAttribute('y', closestPoint.y - 10);
+                checkpointLabel.setAttribute('text-anchor', 'middle');
+                checkpointLabel.setAttribute('font-size', '10');
+                checkpointLabel.textContent = checkpointId;
+            
+                // Combine elements
+                checkpointGroup.appendChild(hitArea);
+                checkpointGroup.appendChild(checkpoint);
+                checkpointGroup.appendChild(checkpointLabel);
+            
+                // Add context menu for checkpoint
+                checkpointGroup.addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
+                    this.showContextMenu(e, checkpointGroup);
+                });
+            
+                // Make the checkpoint draggable
+                const dragHandler = this.startCheckpointDrag.bind(this);
+                hitArea.addEventListener('mousedown', dragHandler);
+                checkpoint.addEventListener('mousedown', dragHandler);
+            
+                // Add the checkpoint to the SVG layer
+                this.wiresLayer.appendChild(checkpointGroup);
+            
+                // Ensure the checkpoint renders on top
+                checkpointGroup.parentNode.appendChild(checkpointGroup);
+            
+                // Store the checkpoint reference
+                if (!this.checkpoints.has(connectionPath)) {
+                    this.checkpoints.set(connectionPath, []);
+                }
+                this.checkpoints.get(connectionPath).push(checkpointGroup);
+            
+                this.saveState();
+                return checkpointGroup;
+            }
+
+            removeCheckpoint(checkpointGroup) {
+                if (!checkpointGroup) {
+                    console.warn("No checkpoint group was provided for removal.");
+                    return;
+                }
+                for (const [path, checkpoints] of this.checkpoints.entries()) {
+                    const index = checkpoints.findIndex(cp => cp.isEqualNode(checkpointGroup));
+                    if (index !== -1) {
+                        checkpoints.splice(index, 1);
+                        this.wiresLayer.removeChild(checkpointGroup);
+                        this.updateWirePathWithCheckpoints(path);
+                        console.log("Checkpoint removed successfully.");
+                        break;
+                    }
+                }
+                this.saveState();
+            }
+
+
+        
+            // Method to start dragging a checkpoint
+            startCheckpointDrag(e) {
+                this.saveState();
+                this.draggedCheckpoint = e.target.closest('.wire-checkpoint-group');
+                this.draggedCheckpoint.classList.add('dragging');
+        
+                // Add event listeners for mouse move and up
+                document.addEventListener('mousemove', this.moveCheckpoint.bind(this));
+                document.addEventListener('mouseup', this.stopCheckpointDrag.bind(this));
+            }
+
+            updateCheckpointAppearance(checkpointGroup, passed) {
+                const checkpoint = checkpointGroup.querySelector('.wire-checkpoint');
+                if (passed) {
+                    checkpoint.setAttribute('fill', 'green');
+                } else {
+                    checkpoint.setAttribute('fill', 'red');
+                }
+
+                // Bring checkpoint to the front
+                checkpointGroup.parentNode.appendChild(checkpointGroup);
+            }
+        
+            // Method to move a checkpoint
+            moveCheckpoint(e) {
+                if (!this.draggedCheckpoint) return;
+        
+                // Calculate coordinates relative to the SVG, accounting for scale and translation
+                const svgRect = this.wiresLayer.getBoundingClientRect();
+                const x = (e.clientX - svgRect.left);
+                const y = (e.clientY - svgRect.top);
+        
+                // Update checkpoint position
+                const checkpoint = this.draggedCheckpoint.querySelector('.wire-checkpoint');
+                const hitArea = this.draggedCheckpoint.querySelector('.wire-checkpoint-hitarea');
+                
+                checkpoint.setAttribute('cx', x);
+                checkpoint.setAttribute('cy', y);
+                hitArea.setAttribute('cx', x);
+                hitArea.setAttribute('cy', y);
+
+                // Update appearance after movement
+                this.updateCheckpointAppearance(this.draggedCheckpoint, false);
+
+                // Ensure the checkpoint is rendered on top
+                this.draggedCheckpoint.parentNode.appendChild(this.draggedCheckpoint);
+        
+                // Find the connection path this checkpoint belongs to
+                let connectionPath = null;
+                for (const [path, checkpoints] of this.checkpoints.entries()) {
+                    if (checkpoints.includes(this.draggedCheckpoint)) {
+                        connectionPath = path;
+                        break;
+                    }
+                }
+        
+                // Recalculate wire path
+                if (connectionPath) {
+                    this.updateWirePathWithCheckpoints(connectionPath);
+                }
+            }        
+            // Method to stop dragging a checkpoint
+            stopCheckpointDrag() {
+                if (!this.draggedCheckpoint) return;
+        
+                // Remove event listeners
+                document.removeEventListener('mousemove', this.moveCheckpoint.bind(this));
+                document.removeEventListener('mouseup', this.stopCheckpointDrag.bind(this));
+        
+                this.draggedCheckpoint.classList.remove('dragging');
+                this.draggedCheckpoint = null;
+        
+                this.saveState();
+            }        
+            updateWirePathWithCheckpoints(connectionPath) {
+                // Find the corresponding connection
+                const connection = this.connections.find(conn => conn.path === connectionPath);
+                if (!connection) return;
+
+                // Get the start and end coordinates of the connection
+                const startCoords = this.getConnectorCoordinates(connection.start.connector);
+                const endCoords = this.getConnectorCoordinates(connection.end.connector);
+
+                // Get checkpoints for this connection
+                const checkpointsForPath = this.checkpoints.get(connectionPath) || [];
+
+                // **Do not change the path!** Use the existing path on the SVG element
+                const pathLength = connectionPath.getTotalLength();
+
+                // **Snap each checkpoint to the closest point on the path**
+                checkpointsForPath.forEach(checkpointGroup => {
+                    const checkpoint = checkpointGroup.querySelector('.wire-checkpoint');
+                    const hitArea = checkpointGroup.querySelector('.wire-checkpoint-hitarea');
+
+                    // Get the x, y coordinates for the checkpoint
+                    const x = parseFloat(checkpoint.getAttribute('cx'));
+                    const y = parseFloat(checkpoint.getAttribute('cy'));
+
+                    // Get the closest point on the path to this (x, y) position
+                    const closestPoint = this.getClosestPointOnPath(connectionPath, x, y);
+
+                    // Update checkpoint and hit area positions to snap to the path
+                    checkpoint.setAttribute('cx', closestPoint.x);
+                    checkpoint.setAttribute('cy', closestPoint.y);
+                    hitArea.setAttribute('cx', closestPoint.x);
+                    hitArea.setAttribute('cy', closestPoint.y);
+                });
+
+                // **Sort the checkpoints based on their distance along the original path**
+                const sortedCheckpoints = checkpointsForPath.map(cpGroup => {
+                    const checkpoint = cpGroup.querySelector('.wire-checkpoint');
+                    const x = parseFloat(checkpoint.getAttribute('cx'));
+                    const y = parseFloat(checkpoint.getAttribute('cy'));
+
+                    // Find distance from start of path
+                    const closestPoint = this.getClosestPointOnPath(connectionPath, x, y);
+                    const distanceAlongPath = this.getDistanceAlongPath(connectionPath, closestPoint.x, closestPoint.y);
+                    
+                    return {
+                        group: cpGroup,
+                        distance: distanceAlongPath
+                    };
+                }).sort((a, b) => a.distance - b.distance);
+
+                // **Reposition checkpoints according to their order on the path**
+                this.checkpoints.set(connectionPath, sortedCheckpoints.map(cp => cp.group));
+            }
+
+
+            getClosestPointOnPath(path, x, y) {
+                const pathLength = path.getTotalLength();
+                let closestPoint = { x: 0, y: 0 };
+                let minDistance = Infinity;
+
+                // Step through the path and find the closest point to (x, y)
+                for (let i = 0; i <= pathLength; i += 1) {
+                    const point = path.getPointAtLength(i);
+                    const distance = this.calculateDistance({ x: point.x, y: point.y }, { x, y });
+
+                    if (distance < minDistance) {
+                        minDistance = distance;
+                        closestPoint = { x: point.x, y: point.y };
+                    }
+                }
+
+                return closestPoint;
+            }
+
+            getDistanceAlongPath(path, x, y) {
+                const pathLength = path.getTotalLength();
+                let minDistance = Infinity;
+                let closestDistance = 0;
+
+                // Walk along the path to find the distance at which the point occurs
+                for (let i = 0; i <= pathLength; i += 1) {
+                    const point = path.getPointAtLength(i);
+                    const distance = this.calculateDistance({ x: point.x, y: point.y }, { x, y });
+
+                    if (distance < minDistance) {
+                        minDistance = distance;
+                        closestDistance = i; // This is the distance along the path
+                    }
+                }
+
+                return closestDistance;
+            }
+        
+            // Helper method to calculate distance between two points
+            calculateDistance(start, point) {
+                return Math.sqrt(
+                    Math.pow(point.x - start.x, 2) + 
+                    Math.pow(point.y - start.y, 2)
+                );
+            }
+           
+            redrawConnections() {
+                this.connections.forEach(connection => {
+                    const startCoords = this.getConnectorCoordinates(connection.start.connector);
+                    const endCoords = this.getConnectorCoordinates(connection.end.connector);
+        
+                    const pathData = this.createComponentPerpendicularPath(startCoords, endCoords);
+                    connection.path.setAttribute('d', pathData);
+        
+                    // Restore checkpoints if they exist
+                    const pathCheckpoints = this.checkpoints.get(connection.path);
+                    if (pathCheckpoints && pathCheckpoints.length > 0) {
+                        this.updateWirePathWithCheckpoints(connection.path);
+                    }
+                });
+        
+            }
+                    
+        
+            // Additional method to clear all checkpoints for a specific connection
+            clearCheckpointsForConnection(connectionPath) {
+                const checkpoints = this.checkpoints.get(connectionPath) || [];
+                
+                checkpoints.forEach(checkpoint => {
+                    this.wiresLayer.removeChild(checkpoint);
+                });
+        
+                this.checkpoints.set(connectionPath, []);
+                this.saveState();
+            }
+        
+            addConnectorsToComponent(component) {
+                const connectorPositions = [
+                    { class: 'top-connector', position: 'top' },
+                    { class: 'bottom-connector', position: 'bottom' },
+                  //  { class: 'left-connector', position: 'left' },
+                  //  { class: 'right-connector', position: 'right' }
+                ];
+
+                connectorPositions.forEach(conn => {
+                    const connector = document.createElement('div');
+                    connector.classList.add('component-connector', conn.class);
+                    connector.dataset.position = conn.position;
+
+                    // Style the connector
+                    connector.style.position = 'absolute';
+                    connector.style.width = '10px';
+                    connector.style.height = '10px';
+                    connector.style.borderRadius = '50%';
+                    connector.style.backgroundColor = 'rgba(0,255,0,0.5)';
+                    connector.style.cursor = 'pointer';
+
+                    // Position the connector
+                    switch (conn.position) {
+                        case 'top':
+                            connector.style.left = '50%';
+                            connector.style.top = '0';
+                            connector.style.transform = 'translateX(-50%)';
+                            break;
+                        case 'bottom':
+                            connector.style.left = '50%';
+                            connector.style.bottom = '0';
+                            connector.style.transform = 'translateX(-50%)';
+                            break;
+                       /* case 'left':
+                            connector.style.left = '0';
+                            connector.style.top = '50%';
+                            connector.style.transform = 'translateY(-50%)';
+                            break;
+                        case 'right':
+                            connector.style.right = '0';
+                            connector.style.top = '50%';
+                            connector.style.transform = 'translateY(-50%)';
+                            break;*/
+                    }
+
+                    connector.addEventListener('click', this.handleConnectorClick.bind(this));
+                    component.appendChild(connector);
+                    this.componentConnectors.push(connector);
+                });
+            }
+            addDraggableFunctionality(component) {
+                component.setAttribute('draggable', 'true');
+                component.addEventListener('dragstart', this.startComponentDrag.bind(this));
+                component.addEventListener('dragend', this.endComponentDrag.bind(this));
+            }
+
+            startComponentDrag(e) {
+                this.saveState();
+                const target = e.target.closest('.network-component');
+                if (!target) return;
+
+                this.movingComponent = target;
+                e.dataTransfer.setData('text/plain', ''); // Required for drag events
+                console.log("Component drag started:", this.movingComponent);
+            }
+
+            endComponentDrag(e) {
+                if (!this.movingComponent) return;
+                this.saveState();
+                const canvasRect = document.getElementById('canvas-container').getBoundingClientRect();
+                const x = e.clientX - canvasRect.left - this.movingComponent.offsetWidth / 2;
+                const y = e.clientY - canvasRect.top - this.movingComponent.offsetHeight / 2;
+
+                this.movingComponent.style.left = `${x}px`;
+                this.movingComponent.style.top = `${y}px`;
+
+                this.redrawConnections();
+                console.log("Component drag ended. Updated position:", x, y);
+
+                this.movingComponent = null;
+                this.saveState();
+            }
+
+            handleConnectorClick(e) {
+                if (!this.isConnectMode) return;
+                
+                const connector = e.target;
+                const component = connector.closest('.network-component');
+        
+                if (!this.selectedConnector) {
+                    this.selectedConnector = { connector, component };
+                    connector.classList.add('selected');
+                } else {
+                    // Allow connections between canvas and component connectors
+                    if (this.selectedConnector.component !== component) {
+                        this.createConnection(this.selectedConnector, { connector, component });
+                    }
+        
+                    this.selectedConnector.connector.classList.remove('selected');
+                    this.selectedConnector = null;
+                }
+            }
+
+            deleteComponent(component) {
+                // Save state before deletion
+                this.saveState();
+                this.connections = this.connections.filter(conn => {
+                    if (conn.start.component === component || conn.end.component === component) {
+                        // Remove the connection path from the SVG
+                        this.wiresLayer.removeChild(conn.path);
+                        return false;
+                    }
+                    return true;
+                });
+        
+                // Remove the component from the canvas and components array
+                document.getElementById('canvas-container').removeChild(component);
+                this.components = this.components.filter(comp => comp !== component);
+                this.saveState();
+            }
+        
+            deleteConnection(connectionPath) {
+                // Confirm connection deletion
+                const confirmDelete = window.confirm("Are you sure you want to delete this connection?");
+                
+                if (confirmDelete) {
+                    // Save state before deletion
+                    this.saveState();
+                    
+                    // Find and remove the connection
+                    const connectionIndex = this.connections.findIndex(conn => conn.path === connectionPath);
+                    if (connectionIndex !== -1) {
+                        // Remove the connection path from the SVG
+                        this.wiresLayer.removeChild(connectionPath);
+                        
+                        // Remove from connections array
+                        this.connections.splice(connectionIndex, 1);
+                        
+                        // Save state after deletion
+                        this.saveState();
+                        
+                        // Clear redo stack
+                        this.redoStack = [];
+                    }
+                }
+            }
+            
+            connectComponents(startConnector, endConnector) {
+                const startComponent = startConnector.closest('.network-component');
+                const endComponent = endConnector.closest('.network-component');
+                this.saveState();
+            
+                // If this is the first time these components are connected
+                if (!this.componentPriorities.has(startComponent.id)) {
+                    this.connectionCounter++;
+                    this.componentPriorities.set(startComponent.id, this.connectionCounter);
+                }
+                
+                if (!this.componentPriorities.has(endComponent.id)) {
+                    this.connectionCounter++;
+                    this.componentPriorities.set(endComponent.id, this.connectionCounter);
+                }
+                
+                this.saveState();
+            }
+            createConnection(start, end) {
+                this.saveState();
+                
+                const exists = this.connections.some(conn => 
+                    (conn.start === start && conn.end === end) || 
+                    (conn.start === end && conn.end === start)
+                );
+                
+                if (!exists) {
+                    const startRect = this.getConnectorCoordinates(start.connector);
+                    const endRect = this.getConnectorCoordinates(end.connector);
+                    
+                    // Single Path for the connection (instead of separate forward and reverse paths)
+                    const connectionPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+                    connectionPath.setAttribute('class', 'connection-line');
+                    connectionPath.setAttribute('vector-effect', 'non-scaling-stroke');
+                    
+                    // Create a single path that represents the bidirectional connection
+                    connectionPath.setAttribute('d', this.createComponentPerpendicularPath(startRect, endRect));
+                    this.wiresLayer.appendChild(connectionPath);
+                    
+                    // Store Connection (single entry instead of two)
+                    const connection = { start, end, path: connectionPath };
+                    this.connections.push(connection);
+            
+                    // Add double-click event listener for adding checkpoints
+                    connectionPath.addEventListener('dblclick', (e) => {
+                        // Prevent default to stop any other actions
+                        e.preventDefault();
+                        e.stopPropagation();
+            
+                        // Calculate coordinates relative to the SVG
+                        const svgRect = this.wiresLayer.getBoundingClientRect();
+                        const x = (e.clientX - svgRect.left);
+                        const y = (e.clientY - svgRect.top);
+            
+                        // Add checkpoint to the connection path
+                        this.addCheckpointToWire(connectionPath, x, y);
+                    });
+                }
+                
+                this.saveState();
+            }
+           /* createConnection(start, end) {
+                this.saveState();
+                
+                const exists = this.connections.some(conn => 
+                    (conn.start === start && conn.end === end) || 
+                    (conn.start === end && conn.end === start)
+                );
+                
+                if (!exists) {
+                    const startRect = this.getConnectorCoordinates(start.connector);
+                    const endRect = this.getConnectorCoordinates(end.connector);
+                    
+                    // Forward Path
+                    const forwardPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+                    forwardPath.setAttribute('class', 'connection-line');
+                    forwardPath.setAttribute('vector-effect', 'non-scaling-stroke');
+                    forwardPath.setAttribute('d', this.createComponentPerpendicularPath(startRect, endRect));
+                    this.wiresLayer.appendChild(forwardPath);
+                    
+                    // Reverse Path
+                    const reversePath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+                    reversePath.setAttribute('class', 'connection-line');
+                    reversePath.setAttribute('vector-effect', 'non-scaling-stroke');
+                    reversePath.setAttribute('d', this.createComponentPerpendicularPath(endRect, startRect));
+                    this.wiresLayer.appendChild(reversePath);
+                    
+                    // Store Connections
+                    const forwardConnection = { start, end, path: forwardPath };
+                    const reverseConnection = { start: end, end: start, path: reversePath };
+                    this.connections.push(forwardConnection);
+                    this.connections.push(reverseConnection);
+        
+                    // Add event listener for adding checkpoints
+                    const addCheckpointHandler = (connectionPath) => (e) => {
+                        // Prevent default to stop any other actions
+                        e.preventDefault();
+                        e.stopPropagation();
+        
+                        // Calculate coordinates relative to the SVG
+                        const svgRect = this.wiresLayer.getBoundingClientRect();
+                        const x = (e.clientX - svgRect.left);
+                        const y = (e.clientY - svgRect.top);
+        
+                        // Add checkpoint
+                        this.addCheckpointToWire(connectionPath, x, y);
+                        
+                    };
+        
+                    const paths = [forwardPath, reversePath];
+
+                    // Attach a single event listener to both paths
+                    paths.forEach(path => {
+                        path.addEventListener('dblclick', (e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+
+                            // Calculate coordinates relative to the SVG
+                            const svgRect = this.wiresLayer.getBoundingClientRect();
+                            const x = (e.clientX - svgRect.left);
+                            const y = (e.clientY - svgRect.top);
+
+                            // Add checkpoint to both paths
+                            paths.forEach(connectionPath => this.addCheckpointToWire(connectionPath, x, y));
+                        });
+                    });
+
+                }
+                
+                this.saveState();
+            }*/
+                   
+            // Modify removeCheckpoint to use the data-checkpoint-id for identification
+            removeCheckpoint(checkpointGroup) {
+                for (const [path, checkpoints] of this.checkpoints.entries()) {
+                    const index = checkpoints.indexOf(checkpointGroup);
+                    if (index !== -1) {
+                        checkpoints.splice(index, 1); // Remove from checkpoints array
+                        this.wiresLayer.removeChild(checkpointGroup); // Remove from SVG layer
+                        this.updateWirePathWithCheckpoints(path); // Update path
+                        break;
+                    }
+                }
+                this.saveState();
+            }
+
+            
+            createComponentPerpendicularPath(start, end) {
+                // Create a path that moves through right angles
+                const midX = (start.x + end.x) / 2;
+                const midY = (start.y + end.y) / 2;
+        
+                return `
+                    M${start.x},${start.y} 
+                    H${midX} 
+                    V${end.y} 
+                    H${end.x}
+                `;
+            }
+            
+            getComponentPriority(component) {
+                return this.componentPriorities.get(component.id) || Infinity;
+            }
+    
+    
+            startWireDrag(e, path, start, end) {
+                this.saveState();
+                e.preventDefault();
+                if (e.target.tagName !== 'path') return;
+
+                this.draggedWire = {
+                    path,
+                    start,
+                    end,
+                };
+
+                document.addEventListener('mousemove', this.moveWire.bind(this));
+                document.addEventListener('mouseup', this.stopWireDrag.bind(this));
+                this.saveState();
+            }
+
+            moveWire(e) {
+                this.saveState();
+                if (!this.draggedWire) return;
+
+                const { start, end, path } = this.draggedWire;
+
+                const startCoords = this.getConnectorCoordinates(start.connector);
+                const endCoords = this.getConnectorCoordinates(end.connector);
+
+                // Calculate new midpoint based on the mouse position
+                const canvasRect = document.getElementById('canvas-container').getBoundingClientRect();
+                const mouseX = e.clientX - canvasRect.left;
+                const mouseY = e.clientY - canvasRect.top;
+
+                // Create a new path that allows the midpoint to follow the mouse
+                const newPath = this.createNeatPath(startCoords, { x: mouseX, y: mouseY });
+                const finalPath = this.createNeatPath({ x: mouseX, y: mouseY }, endCoords);
+
+                path.setAttribute('d', `${newPath} ${finalPath}`);
+                this.saveState();
+            }
+
+            stopWireDrag() {
+                if (!this.draggedWire) return;
+
+                // Reset the dragged wire state
+                document.removeEventListener('mousemove', this.moveWire.bind(this));
+                document.removeEventListener('mouseup', this.stopWireDrag.bind(this));
+
+                console.log("Wire drag complete");
+                this.draggedWire = null;
+
+                // Save state only after the wire drag action is finished
+                this.saveState();
+            }
+ 
+            createNeatPath(start, end) {
+                const midX = (start.x + end.x) / 2;
+                const midY = (start.y + end.y) / 2;
+                return `M${start.x},${start.y} C${midX},${start.y} ${midX},${end.y} ${end.x},${end.y}`;
+            }
+            getConnectorCoordinates(connector) {
+                const connectorRect = connector.getBoundingClientRect();
+                const canvasRect = document.getElementById('canvas-container').getBoundingClientRect();
+
+                return {
+                    x: connectorRect.left - canvasRect.left + connectorRect.width / 2,
+                    y: connectorRect.top - canvasRect.top + connectorRect.height / 2,
+                };
+            }
+           
+            clearCanvas() {
+                if (confirm('Are you sure you want to delete all items?')) {
+                    // Remove all network components
+                    this.components.forEach(component => component.remove());
+                    this.components = [];
+
+                    // Remove all wire connections
+                    this.connections.forEach(connection => connection.path.remove());
+                    this.connections = [];
+
+                    // Clear the wire layer but leave the canvas intact
+                    this.wiresLayer.innerHTML = '';
+                }
+            }
+    
+            /*saveArchitecture() {
+                // Helper function to get checkpoints for a connection path
+                const getCheckpointsForPath = (path) => {
+                    const checkpoints = this.checkpoints.get(path) || [];
+                    return checkpoints.map(checkpoint => ({
+                        id: checkpoint.getAttribute('data-checkpoint-id'),
+                        x: parseFloat(checkpoint.querySelector('.wire-checkpoint').getAttribute('cx')),
+                        y: parseFloat(checkpoint.querySelector('.wire-checkpoint').getAttribute('cy'))
+                    }));
+                };
+            
+                // Helper function to build component paths
+                const buildComponentPaths = (component) => {
+                    const paths = [];
+                    const componentId = component.dataset.id;
+            
+                    // Find all connections where this component is involved
+                    const relevantConnections = this.connections.filter(conn => 
+                        conn.start.component.dataset.id === componentId || 
+                        conn.end.component.dataset.id === componentId
+                    );
+            
+                    for (const connection of relevantConnections) {
+                        const isSource = connection.start.component.dataset.id === componentId;
+                        const otherComponent = isSource ? connection.end.component : connection.start.component;
+                        
+                        // Skip path creation for side-channel-blower if it's not the source
+                        if (component.dataset.type === 'side-channel-blower' && !isSource) {
+                            continue;
+                        }
+            
+                        // Get checkpoints for this connection
+                        const checkpoints = getCheckpointsForPath(connection.path);
+            
+                        // Find the complete path to the target using findPath
+                        const completePath = this.findPath(component, otherComponent);
+                        
+                        if (completePath) {
+                            paths.push({
+                                targetComponent: {
+                                    id: otherComponent.dataset.id,
+                                    type: otherComponent.dataset.type
+                                },
+                                checkpoints,
+                                path: completePath.map(comp => ({
+                                    id: comp.dataset.id,
+                                    type: comp.dataset.type,
+                                    priority: this.componentPriorities.get(comp.dataset.id) || 0
+                                })),
+                                metadata: {
+                                    isValid: this.isValidTransition(component, otherComponent),
+                                    priority: this.componentPriorities.get(otherComponent.dataset.id) || 0,
+                                    startConnector: {
+                                        position: connection.start.connector.dataset.position,
+                                        coordinates: this.getConnectorCoordinates(connection.start.connector)
+                                    },
+                                    endConnector: {
+                                        position: connection.end.connector.dataset.position,
+                                        coordinates: this.getConnectorCoordinates(connection.end.connector)
+                                    }
+                                }
+                            });
+                        }
+                    }
+            
+                    return paths;
+                };
+            
+                const architecture = {
+                    // Preserve existing component data
+                    components: this.components.map(comp => {
+                        const componentData = {
+                            id: comp.dataset.id,
+                            type: comp.dataset.type,
+                            x: parseFloat(comp.style.left),
+                            y: parseFloat(comp.style.top),
+                            width: comp.offsetWidth,
+                            height: comp.offsetHeight,
+                            priority: this.componentPriorities.get(comp.dataset.id) || 0
+                        };
+            
+                        // Add paths for all components except side-channel-blower
+                        if (comp.dataset.type !== 'side-channel-blower' || 
+                            (comp.dataset.type === 'side-channel-blower' && this.connections.some(conn => conn.start.component === comp))) {
+                            componentData.paths = buildComponentPaths(comp);
+                        }
+            
+                        // Add buffer configuration if it exists
+                        if (comp.bufferConfig) {
+                            componentData.bufferConfig = comp.bufferConfig;
+                        }
+            
+                        return componentData;
+                    }),
+            
+                    // Preserve existing connection data
+                    connections: this.connections.filter(conn => conn.start && conn.end).map(conn => ({
+                        start: {
+                            componentId: conn.start.component.dataset.id,
+                            componentType: conn.start.component.dataset.type,
+                            x: parseFloat(conn.start.component.style.left),
+                            y: parseFloat(conn.start.component.style.top),
+                            connectorPosition: conn.start.connector.dataset.position,
+                            connectorX: this.getConnectorCoordinates(conn.start.connector).x,
+                            connectorY: this.getConnectorCoordinates(conn.start.connector).y
+                        },
+                        end: {
+                            componentId: conn.end.component.dataset.id,
+                            componentType: conn.end.component.dataset.type,
+                            x: parseFloat(conn.end.component.style.left),
+                            y: parseFloat(conn.end.component.style.top),
+                            connectorPosition: conn.end.connector.dataset.position,
+                            connectorX: this.getConnectorCoordinates(conn.end.connector).x,
+                            connectorY: this.getConnectorCoordinates(conn.end.connector).y
+                        },
+                        checkpoints: getCheckpointsForPath(conn.path)
+                    })),
+            
+                    // Add metadata about the network
+                    metadata: {
+                        globalCheckpointCounter: this.globalCheckpointCounter,
+                        componentCounter: this.componentCounter,
+                        connectionCounter: this.connectionCounter
+                    }
+                };
+            
+                const blob = new Blob([JSON.stringify(architecture, null, 2)], { type: 'application/json' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = 'network_architecture.json';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                alert('Network architecture saved successfully!');
+            }*/
+            saveArchitecture() {
+                // Helper function to get checkpoints for a connection path
+                const getCheckpointsForPath = (path, startComponent, endComponent) => {
+                    const checkpoints = this.checkpoints.get(path) || [];
+                    return checkpoints.map(checkpoint => {
+                        const checkpointCoords = {
+                            x: parseFloat(checkpoint.querySelector('.wire-checkpoint').getAttribute('cx')),
+                            y: parseFloat(checkpoint.querySelector('.wire-checkpoint').getAttribute('cy'))
+                        };
+            
+                        // Calculate distances from both start and end components
+                        const startDistance = this.calculateDistance(
+                            { 
+                                x: parseFloat(startComponent.style.left), 
+                                y: parseFloat(startComponent.style.top) 
+                            },
+                            checkpointCoords
+                        );
+            
+                        const endDistance = this.calculateDistance(
+                            { 
+                                x: parseFloat(endComponent.style.left), 
+                                y: parseFloat(endComponent.style.top) 
+                            },
+                            checkpointCoords
+                        );
+            
+                        return {
+                            id: checkpoint.getAttribute('data-checkpoint-id'),
+                            x: checkpointCoords.x,
+                            y: checkpointCoords.y,
+                            distances: {
+                                fromStart: startDistance,
+                                fromEnd: endDistance
+                            }
+                        };
+                    });
+                };
+            
+                // Helper function to build component paths
+                const buildComponentPaths = (component) => {
+                    const paths = [];
+                    const componentId = component.dataset.id;
+            
+                    // Find all connections where this component is involved
+                    const relevantConnections = this.connections.filter(conn => 
+                        conn.start.component.dataset.id === componentId || 
+                        conn.end.component.dataset.id === componentId
+                    );
+            
+                    for (const connection of relevantConnections) {
+                        const isSource = connection.start.component.dataset.id === componentId;
+                        const otherComponent = isSource ? connection.end.component : connection.start.component;
+                        
+                        // Skip path creation for side-channel-blower if it's not the source
+                        if (component.dataset.type === 'side-channel-blower' && !isSource) {
+                            continue;
+                        }
+            
+                        // Get checkpoints for this connection with distances
+                        const checkpoints = getCheckpointsForPath(
+                            connection.path, 
+                            connection.start.component, 
+                            connection.end.component
+                        );
+            
+                        // Find the complete path to the target using findPath
+                        const completePath = this.findPath(component, otherComponent);
+                        
+                        if (completePath) {
+                            paths.push({
+                                targetComponent: {
+                                    id: otherComponent.dataset.id,
+                                    type: otherComponent.dataset.type
+                                },
+                                checkpoints,
+                                path: completePath.map(comp => ({
+                                    id: comp.dataset.id,
+                                    type: comp.dataset.type,
+                                    priority: this.componentPriorities.get(comp.dataset.id) || 0
+                                })),
+                                metadata: {
+                                    isValid: this.isValidTransition(component, otherComponent),
+                                    priority: this.componentPriorities.get(otherComponent.dataset.id) || 0,
+                                    startConnector: {
+                                        position: connection.start.connector.dataset.position,
+                                        coordinates: this.getConnectorCoordinates(connection.start.connector)
+                                    },
+                                    endConnector: {
+                                        position: connection.end.connector.dataset.position,
+                                        coordinates: this.getConnectorCoordinates(connection.end.connector)
+                                    }
+                                }
+                            });
+                        }
+                    }
+            
+                    return paths;
+                };
+            
+                const architecture = {
+                    // Preserve existing component data
+                    components: this.components.map(comp => {
+                        const componentData = {
+                            id: comp.dataset.id,
+                            type: comp.dataset.type,
+                            x: parseFloat(comp.style.left),
+                            y: parseFloat(comp.style.top),
+                            width: comp.offsetWidth,
+                            height: comp.offsetHeight,
+                            priority: this.componentPriorities.get(comp.dataset.id) || 0
+                        };
+            
+                        // Add paths for all components except side-channel-blower
+                        if (comp.dataset.type !== 'side-channel-blower' || 
+                            (comp.dataset.type === 'side-channel-blower' && this.connections.some(conn => conn.start.component === comp))) {
+                            componentData.paths = buildComponentPaths(comp);
+                        }
+            
+                        // Add buffer configuration if it exists
+                        if (comp.bufferConfig) {
+                            componentData.bufferConfig = comp.bufferConfig;
+                        }
+            
+                        return componentData;
+                    }),
+            
+                    // Update connection data to include checkpoint distances
+                    connections: this.connections.filter(conn => conn.start && conn.end).map(conn => ({
+                        start: {
+                            componentId: conn.start.component.dataset.id,
+                            componentType: conn.start.component.dataset.type,
+                            x: parseFloat(conn.start.component.style.left),
+                            y: parseFloat(conn.start.component.style.top),
+                            connectorPosition: conn.start.connector.dataset.position,
+                            connectorX: this.getConnectorCoordinates(conn.start.connector).x,
+                            connectorY: this.getConnectorCoordinates(conn.start.connector).y
+                        },
+                        end: {
+                            componentId: conn.end.component.dataset.id,
+                            componentType: conn.end.component.dataset.type,
+                            x: parseFloat(conn.end.component.style.left),
+                            y: parseFloat(conn.end.component.style.top),
+                            connectorPosition: conn.end.connector.dataset.position,
+                            connectorX: this.getConnectorCoordinates(conn.end.connector).x,
+                            connectorY: this.getConnectorCoordinates(conn.end.connector).y
+                        },
+                        checkpoints: getCheckpointsForPath(conn.path, conn.start.component, conn.end.component)
+                    })),
+            
+                    // Add metadata about the network
+                    metadata: {
+                        globalCheckpointCounter: this.globalCheckpointCounter,
+                        componentCounter: this.componentCounter,
+                        connectionCounter: this.connectionCounter
+                    }
+                };
+            
+                const blob = new Blob([JSON.stringify(architecture, null, 2)], { type: 'application/json' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = 'network_architecture.json';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                alert('Network architecture saved successfully!');
+            }
+    
+            exportArchitecture() {
+                let exportText = "Network Architecture Export\n===========================\n\nComponents:\n";
+                this.components.forEach((comp, index) => {
+                    exportText += `${index + 1}. ${comp.dataset.type} - Position: (${comp.style.left}, ${comp.style.top})\n`;
+                });
+                exportText += "\nConnections:\n";
+                this.connections.forEach((conn, index) => {
+                    exportText += `${index + 1}. ${conn.start.component.dataset.type} (${conn.start.connector.dataset.position}) → ${conn.end.component.dataset.type} (${conn.end.connector.dataset.position})\n`;
+                });
+    
+                const blob = new Blob([exportText], { type: 'text/plain' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = 'network_architecture.txt';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                alert('Network architecture exported successfully!');
+            }
+    
+            showSimulationModal() {
+                this.startNodeSelect.innerHTML = '';
+                this.endNodeSelect.innerHTML = '';
+            
+                // Filter out side channel blower from component selection
+                const selectableComponents = this.components.filter(comp => 
+                    comp.dataset.type !== 'side-channel-blower'
+                );
+            
+                selectableComponents.forEach(comp => {
+                    const option = document.createElement('option');
+                    option.value = comp.textContent;
+                    option.textContent = comp.textContent;
+                    this.startNodeSelect.appendChild(option);
+                    this.endNodeSelect.appendChild(option.cloneNode(true));
+                });
+            
+                this.simulationModal.style.display = 'flex';
+            }
+    
+            hideSimulationModal() {
+                this.simulationModal.style.display = 'none';
+            }
+            validateSideChannelBlowerConnectivity() {
+                // Find all side channel blowers
+                const sideChannelBlowers = this.components.filter(
+                    comp => comp.dataset.type === 'side-channel-blower'
+                );
+        
+                // If no side channel blowers exist
+                if (sideChannelBlowers.length === 0) {
+                    throw new Error('No side channel blower present in the system.');
+                }
+        
+                // Validate each side channel blower
+                for (const blower of sideChannelBlowers) {
+                    // Check if the blower is connected to at least one component
+                    const isConnected = this.connections.some(conn => 
+                        conn.start.component === blower || conn.end.component === blower
+                    );
+        
+                    if (!isConnected) {
+                        throw new Error(`Side channel blower ${blower.textContent} is not connected to any component.`);
+                    }
+                }
+        
+                return true;
+            }
+            runSimulation() {
+                try {
+                    this.validateSideChannelBlowerConnectivity();
+
+                    const startNode = this.startNodeSelect.value;
+                    const endNode = this.endNodeSelect.value;
+
+                    console.log(`Selected Start Node: ${startNode}`);
+                    console.log(`Selected End Node: ${endNode}`);
+
+                    const startComponent = this.components.find(comp => comp.textContent === startNode);
+                    const endComponent = this.components.find(comp => comp.textContent === endNode);
+
+                    console.log(`Mapped Start Component: ${startComponent ? startComponent.dataset.id : 'Not Found'}`);
+                    console.log(`Mapped End Component: ${endComponent ? endComponent.dataset.id : 'Not Found'}`);
+
+                    if (!startComponent || !endComponent) {
+                        alert('Invalid nodes selected.');
+                        return;
+                    }
+
+                    const path = this.findPath(startComponent, endComponent);
+                    console.log(`Resolved Path: ${path ? path.map(node => node.dataset.id).join(' → ') : 'No Path Found'}`);
+
+                    if (!path) {
+                        alert('No path found between the selected nodes.');
+                        return;
+                    }
+
+                    this.animatePacketTransmission(path);
+                } catch (error) {
+                    alert(error.message);
+                }
+            }
+           
+            findPath(start, end, visited = new Set()) {
+                console.log(`🔍 Exploring path from ${start.dataset.id} to ${end.dataset.id}`);
+
+                // Base case: If start and end are the same, we found the path
+                if (start === end) {
+                    console.log(` Path found: ${start.dataset.id}`);
+                    return [start];
+                }
+
+                // Mark the current component as visited
+                visited.add(start.dataset.id);
+
+                // Get all direct connections
+                const directConnections = this.connections.filter(conn =>
+                    (conn.start.component === start && !visited.has(conn.end.component.dataset.id)) ||
+                    (conn.end.component === start && !visited.has(conn.start.component.dataset.id))
+                );
+
+                for (const conn of directConnections) {
+                    const nextHop = conn.start.component === start ? conn.end.component : conn.start.component;
+
+                    // Allow using Side Channel Blower only at the start or end
+                    if (nextHop.dataset.type === 'side-channel-blower' && nextHop !== end && start !== nextHop) {
+                        console.log(` Skipping SCB as an intermediate node: ${nextHop.dataset.id}`);
+                        continue;
+                    }
+
+                    console.log(`🔄 Valid transition: ${start.dataset.id} → ${nextHop.dataset.id}`);
+
+                    const subPath = this.findPath(nextHop, end, new Set([...visited])); // Clone visited set
+                    if (subPath) {
+                        return [start, ...subPath];
+                    }
+                }
+
+                console.log(` No path found from ${start.dataset.id} to ${end.dataset.id}`);
+                return null;
+            }
+
+            isValidTransition(fromComponent, toComponent) {
+                const fromType = fromComponent.dataset.type;
+                const toType = toComponent.dataset.type;
+
+                // Allow side-channel blower as an intermediate connection
+                if (fromType === 'side-channel-blower' || toType === 'side-channel-blower') {
+                    return true; // Remove restrictions for debugging; adjust as needed
+                }
+
+                // Buffer component transition rules
+                if (fromComponent.bufferConfig) {
+                    return fromComponent.bufferConfig.allowedComponentTypes.includes(toType);
+                }
+
+                return true; // Default allow
+            }
+
+            animatePacketTransmission(path) {
+                this.hideSimulationModal();
+                if (!path || path.length < 2) {
+                    console.error('Invalid path provided for packet transmission.');
+                    return;
+                }
+            
+                const canvas = document.getElementById('canvas-container');
+                const packet = document.createElement('div');
+                packet.classList.add('packet');
+                canvas.appendChild(packet);
+            
+                // Create a details overlay to show component and checkpoint information
+                const detailsOverlay = document.createElement('div');
+                detailsOverlay.classList.add('details-overlay');
+                detailsOverlay.style.position = 'fixed';
+                detailsOverlay.style.top = '10px';
+                detailsOverlay.style.right = '10px';
+                detailsOverlay.style.zIndex = '1000';
+                detailsOverlay.style.backgroundColor = 'rgba(255,255,255,0.9)';
+                detailsOverlay.style.padding = '10px';
+                detailsOverlay.style.borderRadius = '5px';
+                detailsOverlay.style.maxWidth = '250px';
+                canvas.appendChild(detailsOverlay);
+            
+                // Create a checkpoint status overlay with updated positioning
+                const checkpointStatusOverlay = document.createElement('div');
+                checkpointStatusOverlay.classList.add('checkpoint-status-overlay');
+                checkpointStatusOverlay.style.position = 'fixed';
+                checkpointStatusOverlay.style.top = '10px';
+                checkpointStatusOverlay.style.right = '270px'; // Positioned left of details overlay
+                checkpointStatusOverlay.style.zIndex = '1000';
+                checkpointStatusOverlay.style.backgroundColor = 'rgba(255,255,255,0.9)';
+                checkpointStatusOverlay.style.padding = '10px';
+                checkpointStatusOverlay.style.borderRadius = '5px';
+                checkpointStatusOverlay.style.maxWidth = '200px';
+                checkpointStatusOverlay.style.marginTop = '80px';
+                checkpointStatusOverlay.style.marginRight = '5px';
+                canvas.appendChild(checkpointStatusOverlay);
+            
+                let currentConnectionIndex = 0;
+                let passedCheckpoints = new Set(); // Track passed checkpoints
+            
+                const updateCheckpointStatusOverlay = () => {
+                    checkpointStatusOverlay.innerHTML = `
+                        <h4>Checkpoint Status</h4>
+                        ${Array.from(passedCheckpoints).map(checkpointId => 
+                            `<p style="color: green; margin: 5px 0;">✅ Checkpoint ${checkpointId} Cleared</p>`
+                        ).join('')}
+                    `;
+                };
+            
+                const updateDetailsOverlay = (component) => {
+                    detailsOverlay.innerHTML = '';
+                    detailsOverlay.style.display = 'none';
+                
+                    if (!component) {
+                        console.warn('No component provided for details');
+                        return;
+                    }
+                
+                    try {
+                        const blowerDetails = component.blowerConfig || {};
+                        
+                        const details = [
+                            { label: 'Component', value: component.textContent || 'Unknown' },
+                            { label: 'Motor Type', value: blowerDetails.motorType || 'Not Set' },
+                            { label: 'VFD Compatible', value: blowerDetails.vfdCompatible ? 'Yes' : 'No' },
+                            { label: 'Inlet Status', value: blowerDetails.inletStatus || 'Unknown' },
+                            { label: 'Outlet Status', value: blowerDetails.outletStatus || 'Unknown' },
+                            { 
+                                label: 'Airflow Rate', 
+                                value: blowerDetails.airflowRate 
+                                    ? `${blowerDetails.airflowRate} m³/h` 
+                                    : 'Not Available' 
+                            },
+                            { 
+                                label: 'Pressure', 
+                                value: blowerDetails.pressure 
+                                    ? `${blowerDetails.pressure.toFixed(2)} kPa` 
+                                    : 'Not Available' 
+                            },
+                            { 
+                                label: 'Max Pressure', 
+                                value: blowerDetails.maxPressure 
+                                    ? `${blowerDetails.maxPressure} kPa` 
+                                    : 'Not Available' 
+                            },
+                            { 
+                                label: 'Max Airflow Rate', 
+                                value: blowerDetails.maxAirflowRate 
+                                    ? `${blowerDetails.maxAirflowRate} m³/h` 
+                                    : 'Not Available' 
+                            }
+                        ];
+                
+                        const detailsContent = `
+                            <h3>${details[0].value} Details</h3>
+                            ${details.slice(1).map(detail => 
+                                `<p><strong>${detail.label}:</strong> ${detail.value}</p>`
+                            ).join('')}
+                        `;
+                        
+                        detailsOverlay.innerHTML = detailsContent;
+                        detailsOverlay.style.display = 'block';
+                    } catch (error) {
+                        console.error('Error updating details overlay:', error);
+                    }
+                };
+            
+                const createAirflowArrow = (startPoint, endPoint, isReversed) => {
+                    const existingArrows = canvas.querySelectorAll('.airflow-arrow');
+                    existingArrows.forEach(arrow => arrow.remove());
+                
+                    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+                    svg.setAttribute('class', 'airflow-arrow');
+                    svg.style.position = 'absolute';
+                    svg.style.width = '50px';
+                    svg.style.height = '50px';
+                    svg.style.pointerEvents = 'none';
+                
+                    svg.setAttribute('viewBox', '0 0 50 50');
+                
+                    const arrowPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+                    
+                    if (isReversed) {
+                        arrowPath.setAttribute('d', 'M40,25 L10,25 L25,10 M10,25 L25,40');
+                    } else {
+                        arrowPath.setAttribute('d', 'M10,25 L40,25 L25,10 M40,25 L25,40');
+                    }
+                    
+                    arrowPath.setAttribute('stroke', 'red');
+                    arrowPath.setAttribute('stroke-width', '3');
+                    arrowPath.setAttribute('fill', 'none');
+                    
+                    svg.appendChild(arrowPath);
+                
+                    const centerX = (startPoint.x + endPoint.x) / 2;
+                    const centerY = (startPoint.y + endPoint.y) / 2;
+                    
+                    svg.style.left = `${centerX - 25}px`;
+                    svg.style.top = `${centerY - 25}px`;
+                
+                    if (getComputedStyle(canvas).position === 'static') {
+                        canvas.style.position = 'relative';
+                    }
+                
+                    canvas.appendChild(svg);
+                    
+                    return svg;
+                };
+            
+                const animate = () => {
+                    if (currentConnectionIndex >= path.length - 1) {
+                        packet.remove();
+                        detailsOverlay.remove();
+                        checkpointStatusOverlay.remove();
+                        canvas.querySelectorAll('.airflow-arrow').forEach(arrow => arrow.remove());
+                
+                        this.resetCheckpoints();
+                
+                        alert('Packet transmission complete!');
+                        return;
+                    }
+                
+                    const startComponent = path[currentConnectionIndex];
+                    const endComponent = path[currentConnectionIndex + 1];
+                
+                    updateDetailsOverlay(startComponent);
+                    updateCheckpointStatusOverlay();
+                
+                    const connection = this.connections.find(conn =>
+                        (conn.start.component === startComponent && conn.end.component === endComponent) ||
+                        (conn.end.component === startComponent && conn.start.component === endComponent)
+                    );
+                
+                    if (connection && connection.path) {
+                        const svgPath = connection.path;
+                        const isReversed = connection.start.component !== startComponent;
+                        
+                        let totalLength = svgPath.getTotalLength();                     
+                        
+                        let currentPosition = isReversed ? totalLength : 0;
+                        const step = isReversed ? -0.2 : 0.2; // Reduced step for slower animation
+                
+                        const moveAlongPath = () => {
+                            if ((isReversed && currentPosition <= -45) || (!isReversed && currentPosition >= totalLength + 40)) {
+                                canvas.querySelectorAll('.airflow-arrow').forEach(arrow => arrow.remove());
+                                
+                                currentConnectionIndex++;
+                                animate();
+                                return;
+                            }
+                
+                            const point = svgPath.getPointAtLength(currentPosition);
+                            const nextPoint = svgPath.getPointAtLength(Math.min(currentPosition + 20, totalLength));
+                
+                            const packetRadius = 10;
+                            packet.style.left = `${point.x - packetRadius}px`;
+                            packet.style.top = `${point.y - packetRadius}px`;
+                
+                            const checkpointsOnPath = this.checkpoints.get(svgPath) || [];
+                            checkpointsOnPath.forEach(checkpointGroup => {
+                                const checkpoint = checkpointGroup.querySelector('.wire-checkpoint');
+                                const checkpointId = checkpointGroup.getAttribute('data-checkpoint-id');
+                                
+                                const checkpointX = parseFloat(checkpoint.getAttribute('cx'));
+                                const checkpointY = parseFloat(checkpoint.getAttribute('cy'));
+                
+                                const distance = Math.sqrt(
+                                    Math.pow(point.x - checkpointX, 2) + 
+                                    Math.pow(point.y - checkpointY, 2)
+                                );
+                
+                                if (!this.checkpointStates) {
+                                    this.checkpointStates = new Map();
+                                }
+                
+                                if (!this.checkpointStates.has(checkpointId)) {
+                                    this.checkpointStates.set(checkpointId, false);
+                                }
+                
+                                const currentCheckpointState = this.checkpointStates.get(checkpointId);
+                                if (!currentCheckpointState && distance < 1) {
+                                    passedCheckpoints.add(checkpointId);
+                                    this.checkpointStates.set(checkpointId, true);
+                
+                                    this.updateCheckpointAppearance(checkpointGroup, true);
+                                    updateCheckpointStatusOverlay();
+                
+                                    console.log(`Checkpoint ${checkpointId} passed`);
+                                }
+                            });
+                
+                            if (currentPosition % 50 === 0) {
+                                createAirflowArrow(point, nextPoint, isReversed);
+                            }
+                
+                            currentPosition += step;
+                            requestAnimationFrame(moveAlongPath);
+                        };
+                
+                        moveAlongPath();
+                    } else {
+                        console.error('No connection path found.');
+                        currentConnectionIndex++;
+                        animate();
+                    }
+                };
+                
+                animate();
+            }
+
+           resetCheckpoints() {
+                const checkpointGroups = document.querySelectorAll('.wire-checkpoint-group');
+                this.checkpointStates = new Map(); // Reset checkpoint states for all checkpoints
+                checkpointGroups.forEach(checkpointGroup => {
+                    this.updateCheckpointAppearance(checkpointGroup, false);
+                });
+                console.log("All checkpoints reset to red.");
+            }
+
+            
+            showContextMenu(e, target) {
+                e.preventDefault();
+                this.selectedItem = target;
+        
+                if (target?.classList.contains('wire-checkpoint-group')) {
+                    document.getElementById('delete-checkpoint').style.display = 'block';
+                    document.getElementById('delete-item').style.display = 'none';
+                    document.getElementById('rename-item').style.display = 'none';
+                    document.getElementById('change-color').style.display = 'none';
+                    document.getElementById('rotate-item').style.display = 'none';
+                } else {
+                    // Default to component options
+                    document.getElementById('delete-checkpoint').style.display = 'none';
+                    document.getElementById('delete-item').style.display = 'block';
+                    document.getElementById('rename-item').style.display = 'block';
+                    document.getElementById('change-color').style.display = 'block';
+                    document.getElementById('rotate-item').style.display = 'block';
+                }
+
+                // Position the context menu
+                let x = e.clientX;
+                let y = e.clientY;
+
+                const menuWidth = this.contextMenu.offsetWidth;
+                const menuHeight = this.contextMenu.offsetHeight;
+
+                // Adjust for viewport boundaries
+                if (x + menuWidth > window.innerWidth) x = window.innerWidth - menuWidth - 10;
+                if (y + menuHeight > window.innerHeight) y = window.innerHeight - menuHeight - 10;
+
+                this.contextMenu.style.display = 'block';
+                this.contextMenu.style.left = `${x}px`;
+                this.contextMenu.style.top = `${y}px`;
+
+                console.log("Context menu displayed for:", target);
+            }
+
+            hideContextMenu() {
+                this.contextMenu.style.display = 'none';
+                document.getElementById('delete-checkpoint').style.display = 'none';
+                document.getElementById('delete-item').style.display = 'none';
+                document.getElementById('rename-item').style.display = 'none';
+                document.getElementById('change-color').style.display = 'none';
+                document.getElementById('rotate-item').style.display = 'none';
+                this.selectedItem = null;
+            }
+
+            deleteItem() {
+                if (this.selectedItem) {
+                    this.deleteComponent(this.selectedItem);
+                    alert('Component deleted successfully.');
+                } else {
+                    alert('No component selected for deletion.');
+                }
+                this.hideContextMenu();
+                this.saveState();
+            }
+
+            renameItem() {
+                if (this.selectedItem) {
+                    const currentName = this.selectedItem.querySelector('.component-label').textContent.trim();
+                    const newName = prompt('Enter new name for the component:', currentName);
+
+                    if (newName && newName !== currentName) {
+                        this.selectedItem.querySelector('.component-label').textContent = newName;
+                        alert('Component renamed successfully.');
+                    } else {
+                        alert('Rename cancelled or invalid input.');
+                    }
+                } else {
+                    alert('No component selected for renaming.');
+                }
+                this.hideContextMenu();
+                this.saveState();
+            }
+            rotateComponent() {
+                if (this.selectedItem && !this.selectedItem.classList.contains('wire-checkpoint-group')) {
+                    const componentId = this.selectedItem.id;
+                    
+                    // Get current rotation or initialize to 0
+                    let currentRotation = this.componentRotations.get(componentId) || 0;
+                    
+                    // Add 90 degrees
+                    currentRotation = (currentRotation + 90) % 360;
+                    
+                    // Store new rotation
+                    this.componentRotations.set(componentId, currentRotation);
+                    
+                    // Apply rotation transform
+                    this.selectedItem.style.transform = `rotate(${currentRotation}deg)`;
+                    
+                    // Save state after rotation
+                    this.saveState();
+                }
+                this.hideContextMenu();
+            }
+
+            changeItemColor() {
+                if (this.selectedItem) {
+                    const newColor = prompt('Enter new color (e.g., #FF0000 or red):', this.selectedItem.style.backgroundColor || '#FFFFFF');
+                    if (newColor) {
+                        try {
+                            this.selectedItem.style.backgroundColor = newColor;
+                            alert('Component color changed successfully.');
+                        } catch (error) {
+                            alert('Invalid color format.');
+                        }
+                    } else {
+                        alert('Color change cancelled.');
+                    }
+                } else {
+                    alert('No component selected for color change.');
+                }
+                this.hideContextMenu();
+                this.saveState();
+            }
+        }
+        document.addEventListener('DOMContentLoaded', () => {
+            new NetworkSimulator();
+        });
+    </script>        
+</body>
+</html>

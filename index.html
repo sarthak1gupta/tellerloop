@@ -1,0 +1,1076 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enhanced LAN Monitoring</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/toastify-js/1.12.0/toastify.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/toastify-js/1.12.0/toastify.min.js"></script>
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --secondary-color: #1e40af;
+            --background-color: #f3f4f6;
+            --card-bg: #ffffff;
+            --text-primary: #1f2937;
+            --text-secondary: #4b5563;
+            --success: #10b981;
+            --error: #ef4444;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            background-color: var(--background-color);
+            color: var(--text-primary);
+            line-height: 1.6;
+            padding: 2rem;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: var(--card-bg);
+            padding: 1.5rem;
+            border-radius: 12px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            margin-bottom: 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .header-content {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        .header h1 {
+            color: var(--primary-color);
+            font-size: 1.8rem;
+            font-weight: 700;
+        }
+
+        .status-card {
+            background: var(--card-bg);
+            padding: 1.5rem;
+            border-radius: 12px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            margin-bottom: 2rem;
+        }
+
+        .status-info {
+            display: flex;
+            gap: 2rem;
+            margin-top: 1rem;
+        }
+
+        .status-item {
+            background: var(--background-color);
+            padding: 1rem;
+            border-radius: 8px;
+            flex: 1;
+        }
+
+        .status-item h3 {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .status-item p {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--primary-color);
+        }
+
+        .message-panel {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .send-message {
+            background: var(--card-bg);
+            padding: 1.5rem;
+            border-radius: 12px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        select, input, button {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        select:focus, input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+
+        button {
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        button:hover {
+            background: var(--secondary-color);
+        }
+
+        .progress-container {
+            margin-top: 1rem;
+            background: var(--background-color);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .progress-bar {
+            height: 8px;
+            background: var(--success);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .checkpoints {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .checkpoint-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .checkpoint-item input[type="checkbox"] {
+            width: auto;
+        }
+
+        .logs-section {
+            background: var(--card-bg);
+            padding: 1.5rem;
+            border-radius: 12px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .logs-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .logs-header button {
+            padding: 0.8rem 0.5rem; /* Smaller padding for reduced size */
+            border-radius: 10px;    /* Adjust border-radius if necessary */
+            margin-left: 420px;
+        }
+
+        .logs-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .logs-table th, .logs-table td {
+            padding: 1rem;
+            text-align: left;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .logs-table th {
+            background: var(--background-color);
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        .logs-table tr:hover {
+            background: var(--background-color);
+        }
+
+        .notification {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            background: var(--primary-color);
+            color: white;
+            padding: 1rem;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            z-index: 1000;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .badge-success {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .badge-primary {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+        .logout-btn {
+            background: var(--error);
+            color: white;
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+        
+        .logout-btn:hover {
+            background: #dc2626;
+        }
+        .stations-panel {
+            background: var(--card-bg);
+            padding: 1.5rem;
+            border-radius: 12px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            margin-bottom: 2rem;
+        }
+
+        .stations-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .station-item {
+            background: var(--background-color);
+            padding: 1rem;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .station-status {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+
+        .status-dot.connected {
+            background-color: var(--success);
+        }
+
+        .status-dot.disconnected {
+            background-color: var(--error);
+        }
+
+        .status-dot.pending {
+            background-color: #f59e0b;
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>LAN Monitoring System</h1>
+            <div class="header-content">
+                <div id="admin-controls" style="display: none;">
+                    <button onclick="getMasterLogs()" class="admin-btn">View Master Logs</button>
+                </div>
+                <button onclick="window.location.href='/logout'" class="logout-btn">Logout</button>
+            </div>
+        </div>
+        <div id="user-form" class="status-card">
+            <h2>Station Selection</h2>
+            <div class="form-group">
+                <label for="node-select">Select Your Station:</label>
+                <select id="node-select" onchange="joinRoom()">
+                    <option value="">Select a station</option>
+                </select>
+            </div>
+        </div>
+
+        <div id="node-display" class="status-card" style="display: none;">
+            <h2>Current Status</h2>
+            <div class="status-info">
+                <div class="status-item">
+                    <h3>Current Station</h3>
+                    <p id="current-node"></p>
+                </div>
+                <div class="status-item">
+                    <h3>IP Address</h3>
+                    <p id="node-ip"></p>
+                </div>
+                <div class="status-item">
+                    <h3>Connection Status</h3>
+                    <p><span class="badge badge-success">Connected</span></p>
+                </div>
+            </div>
+        </div>
+        <div class="stations-panel" id="stations-panel" style="display: none;">
+            <h2>Connected Stations</h2>
+            <div id="connected-stations" class="stations-list"></div>
+        </div>
+        <div class="message-panel" id="message-form" style="display: none;">
+            <div class="send-message">
+                <h2>Send Message</h2>
+                <div class="form-group">
+                    <label for="receiver-select">Destination Station:</label>
+                    <select id="receiver-select">
+                        <option value="">Select destination</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="message-input">Message:</label>
+                    <input type="text" id="message-input" placeholder="Type your message...">
+                </div>
+                <button onclick="sendMessage()">Send Message</button>
+
+                <div class="progress-container">
+                    <div class="progress-bar" id="progress-bar"></div>
+                </div>
+
+                <div class="checkpoints">
+                    <div class="checkpoint-item">
+                        <input type="checkbox" id="cp1" class="checkpoint">
+                        <label for="cp1">CP1</label>
+                    </div>
+                    <div class="checkpoint-item">
+                        <input type="checkbox" id="cp2" class="checkpoint">
+                        <label for="cp2">CP2</label>
+                    </div>
+                    <div class="checkpoint-item">
+                        <input type="checkbox" id="cp3" class="checkpoint">
+                        <label for="cp3">CP3</label>
+                    </div>
+                    <div class="checkpoint-item">
+                        <input type="checkbox" id="cp4" class="checkpoint">
+                        <label for="cp4">CP4</label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="logs-section">
+                <div class="logs-header">
+                    <h2>Communication Logs</h2>
+                    <button onclick="getLogs()">Refresh</button>
+                </div>
+                <table class="logs-table">
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>From</th>
+                            <th>To</th>
+                            <th>Message</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="log-body"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const socket =io();
+        let currentNode = '';
+        let currentNodeIP = '';
+        let networkArchitecture = null;
+        let nodeIPMap = new Map();
+        let connectedStations = new Map();
+        let pendingAcknowledgments = new Set();
+
+        document.addEventListener('DOMContentLoaded', async function() {
+            try {
+                // Load network architecture
+                const archResponse = await fetch('/api/network_architecture');
+                if (archResponse.ok) {
+                    networkArchitecture = await archResponse.json();
+                } else {
+                    throw new Error('Failed to load network architecture');
+                }
+            } catch (error) {
+                console.warn('Using default network architecture:', error);
+                networkArchitecture = {
+                    components: Array.from({length: 5}, (_, i) => ({
+                        type: 'passthrough-station',
+                        id: `Station${i + 1}`
+                    }))
+                };
+            }
+        
+            // Initialize the node selects
+            initializeNodeSelects();
+        
+            // Try to auto-select station
+            await autoSelectStation();
+        
+            // Check IP permissions
+            try {
+                const ipCheck = await fetch('/api/check_ip');
+                if (ipCheck.ok) {
+                    const ipData = await ipCheck.json();
+                    document.getElementById('admin-controls').style.display = 
+                        ipData.is_allowed ? 'block' : 'none';
+                }
+            } catch (error) {
+                console.warn('IP check failed:', error);
+                document.getElementById('admin-controls').style.display = 'none';
+            }
+        });
+
+        function showNotification(message, type = 'info') {
+            Toastify({
+                text: message,
+                duration: 3000,
+                gravity: "top",
+                position: "right",
+                style: {
+                    background: type === 'error' ? '#ef4444' : '#2563eb'
+                },
+                stopOnFocus: true
+            }).showToast();
+        }
+
+        function initializeNodeSelects() {
+            const nodeSelect = document.getElementById('node-select');
+            const receiverSelect = document.getElementById('receiver-select');
+            
+            // Clear existing options
+            nodeSelect.innerHTML = '<option value="">Select a station</option>';
+            receiverSelect.innerHTML = '<option value="">Select destination</option>';
+            
+            let stationsAdded = false;
+            
+            // Add all stations from network architecture
+            if (networkArchitecture && networkArchitecture.components) {
+                networkArchitecture.components.forEach((component, index) => {
+                    if (component.type === 'passthrough-station' || component.type === 'bottom-loading-station') {
+                        const stationId = component.id || `Station${index}`;
+                        const nodeOption = new Option(stationId, stationId);
+                        const receiverOption = new Option(stationId, stationId);
+                        
+                        nodeSelect.appendChild(nodeOption);
+                        receiverSelect.appendChild(receiverOption);
+                        
+                        // Initialize IP mapping
+                        nodeIPMap.set(stationId, `192.168.1.${100 + index}`);
+                        
+                        // Initialize connection status if not already set
+                        if (!connectedStations.has(stationId)) {
+                            connectedStations.set(stationId, 'disconnected');
+                        }
+                        
+                        stationsAdded = true;
+                    }
+                });
+            }
+            
+            // Fallback: Add default stations if no stations were added
+            if (!stationsAdded) {
+                for (let i = 1; i <= 5; i++) {
+                    const stationId = `Station${i}`;
+                    nodeSelect.add(new Option(stationId, stationId));
+                    receiverSelect.add(new Option(stationId, stationId));
+                    nodeIPMap.set(stationId, `192.168.1.${100 + i}`);
+                    if (!connectedStations.has(stationId)) {
+                        connectedStations.set(stationId, 'disconnected');
+                    }
+                }
+            }
+            
+            // Enable the node select
+            nodeSelect.disabled = false;
+            
+            // Add change event listener
+            nodeSelect.addEventListener('change', joinRoom);
+        }
+
+    // Replace the loadNetworkArchitecture function with this more detailed version
+    async function loadNetworkArchitecture() {
+    try {
+        const response = await fetch('/api/network_architecture');
+        
+        // Log the response status and content type
+        console.log('Response status:', response.status);
+        console.log('Content type:', response.headers.get('content-type'));
+        
+        // Check if response is ok and is JSON
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        if (!response.headers.get('content-type')?.includes('application/json')) {
+            throw new Error('Response is not JSON');
+        }
+        
+        networkArchitecture = await response.json();
+        initializeNodeSelects();
+    } catch (error) {
+        console.error('Error loading network architecture:', error);
+        console.log('Falling back to default configuration');
+        
+        // Create a default network architecture
+        networkArchitecture = {
+            components: Array.from({length: 5}, (_, i) => ({
+                type: 'passthrough-station',
+                id: i
+            }))
+        };
+        initializeNodeSelects();
+    }
+}
+        socket.on('connect', function() {
+            console.log('Connected to server');
+            if (currentNode) {
+                sendHelloPacket();
+                updateStationsList();
+                updateReceiverDropdown();
+            }
+        });
+
+        // Update connected stations upon receiving the full list from the backend
+        socket.on('update_connected_stations', function(stations) {
+            connectedStations.clear();
+            stations.forEach(station => {
+                connectedStations.set(station, 'connected');
+            });
+            updateStationsList();
+            updateReceiverDropdown();
+        });
+
+        // Add a new station when it's joined
+        socket.on('station_joined', function(data) {
+            connectedStations.set(data.node, 'connected');
+            updateStationsList();
+            updateReceiverDropdown();
+        });
+
+        // Remove a station when it leaves
+        socket.on('station_left', function(data) {
+            connectedStations.delete(data.node);
+            updateStationsList();
+            updateReceiverDropdown();
+        });
+        socket.on('new_message', function(data) {
+            if (currentNode === data.sender || currentNode === data.receiver) {
+                // Format the timestamp correctly before adding to log
+                const formattedData = {
+                    ...data,
+                    timestamp: formatTimestamp(data.timestamp)
+                };
+                addMessageToLog(formattedData);
+                
+                if (data.receiver === currentNode) {
+                    showNotification(`New message from ${data.sender}: "${data.message}"`);
+                    socket.emit('acknowledgment', { 
+                        receiver: currentNode,
+                        sender: data.sender,
+                        ip: currentNodeIP
+                    });
+                }
+            }
+        });
+
+        socket.on('acknowledgment', function(data) {
+            showNotification(`Message acknowledged by ${data.receiver}`, 'success');
+        });
+
+        async function getLogs() {
+            if (!currentNode) return;
+            
+            try {
+                const response = await fetch(`/api/logs?node=${currentNode}`);
+                const logs = await response.json();
+                
+                const logBody = document.getElementById('log-body');
+                // Clear existing logs
+                logBody.innerHTML = '';
+                
+                // Create a Set to track unique message IDs
+                const processedMessages = new Set();
+                
+                // Process logs in reverse order (newest first)
+                logs.reverse().forEach(log => {
+                    // Create a unique identifier for the message
+                    const messageId = `${log.timestamp}-${log.sender}-${log.receiver}-${log.message}`;
+                    
+                    // Only process if we haven't seen this message before
+                    if (!processedMessages.has(messageId)) {
+                        processedMessages.add(messageId);
+                        
+                        if (log.sender === currentNode || log.receiver === currentNode) {
+                            const otherStation = log.sender === currentNode ? log.receiver : log.sender;
+                            if (connectedStations.has(otherStation)) {
+                                connectedStations.set(otherStation, 'connected');
+                            }
+                            
+                            // Create a new log entry with corrected timestamp
+                            const formattedLog = {
+                                ...log,
+                                timestamp: formatTimestamp(log.timestamp)
+                            };
+                            addMessageToLog(formattedLog);
+                        }
+                    }
+                });
+        
+                // Update UI
+                updateStationsList();
+                updateReceiverDropdown();
+                
+            } catch (error) {
+                console.error('Error fetching logs:', error);
+                showNotification('Error fetching logs', 'error');
+            }
+        }
+        
+        async function getMasterLogs() {
+            try {
+                const response = await fetch('/api/master_logs');
+                const logs = await response.json();
+                document.getElementById('log-body').innerHTML = '';
+                logs.forEach(addMessageToLog);
+            } catch (error) {
+                console.error('Error fetching master logs:', error);
+                showNotification('Error fetching master logs', 'error');
+            }
+        }
+
+        function joinRoom() {
+            const nodeSelect = document.getElementById('node-select');
+            const selectedNode = nodeSelect.value;
+        
+            if (selectedNode) {
+                currentNode = selectedNode;
+                currentNodeIP = nodeIPMap.get(selectedNode) || `192.168.1.${100 + Array.from(nodeIPMap.keys()).indexOf(selectedNode)}`;
+        
+                // Clear and reinitialize connectedStations map
+                connectedStations.clear();
+                
+                // Mark current station as connected
+                connectedStations.set(currentNode, 'connected');
+        
+                // Initialize other stations from networkArchitecture
+                if (networkArchitecture && networkArchitecture.components) {
+                    networkArchitecture.components.forEach(component => {
+                        if ((component.type === 'passthrough-station' || component.type === 'bottom-loading-station') 
+                            && component.id !== currentNode) {
+                            // Initialize all other stations as potential connections
+                            connectedStations.set(component.id, 'pending');
+                        }
+                    });
+                }
+        
+                // Update UI elements
+                document.getElementById('current-node').innerText = selectedNode;
+                document.getElementById('node-ip').innerText = currentNodeIP;
+                document.getElementById('user-form').style.display = 'none';
+                document.getElementById('node-display').style.display = 'block';
+                document.getElementById('message-form').style.display = 'grid';
+                document.getElementById('stations-panel').style.display = 'block';
+        
+                // Update the stations list and receiver dropdown
+                updateStationsList();
+                updateReceiverDropdown();
+        
+                // Emit join event
+                socket.emit('join', { 
+                    username: selectedNode,
+                    ip: currentNodeIP
+                });
+                
+                updateStationsList();
+                updateReceiverDropdown();
+                showNotification(`Joined station: ${currentNode}`, 'success');
+                // Start connection process
+                broadcastHelloPacket();
+                getLogs();
+            }
+        }
+        async function autoSelectStation() {
+            try {
+                const ipResponse = await fetch('/api/get_client_ip');
+                if (ipResponse.ok) {
+                    const ipInfo = await ipResponse.json();
+                    currentNodeIP = ipInfo.ip;
+                    
+                    // Find matching station
+                    for (const [stationId, ip] of nodeIPMap.entries()) {
+                        if (ip === currentNodeIP) {
+                            const nodeSelect = document.getElementById('node-select');
+                            nodeSelect.value = stationId;
+                            joinRoom();
+                            break;
+                        }
+                    }
+                }
+            } catch (error) {
+                console.warn('Error in auto-select station:', error);
+            }
+        }
+        
+        function updateStationsList() {
+            const stationsList = document.getElementById('connected-stations');
+            stationsList.innerHTML = '';
+
+            connectedStations.forEach((status, station) => {
+                const stationElement = document.createElement('div');
+                stationElement.className = 'station-item';
+                stationElement.innerHTML = `
+                    <span>${station}</span>
+                    <div class="station-status">
+                        <div class="status-dot ${status}"></div>
+                        <span>${status.charAt(0).toUpperCase() + status.slice(1)}</span>
+                    </div>
+                `;
+                stationsList.appendChild(stationElement);
+            });
+        }
+        // Add this code to both pages' socket event listeners
+socket.on('start_packet_animation', (data) => {
+    // Start animation on staff page
+    if (window.location.pathname.includes('staff')) {
+        // Find the source and destination components
+        const sourceComponent = networkComponents.get(`Station${parseInt(data.sender.slice(-1))}`);
+        const destComponent = networkComponents.get(`Station${parseInt(data.receiver.slice(-1))}`);
+        
+        if (!sourceComponent || !destComponent) {
+            console.error('Components not found:', data);
+            return;
+        }
+
+        // Get component positions
+        const startBounds = sourceComponent.getBoundingClientRect();
+        const endBounds = destComponent.getBoundingClientRect();
+        
+        const pathInfo = {
+            start: {
+                x: startBounds.left + startBounds.width / 2,
+                y: startBounds.top + startBounds.height / 2
+            },
+            end: {
+                x: endBounds.left + endBounds.width / 2,
+                y: endBounds.top + endBounds.height / 2
+            },
+            checkpoints: [
+                { x: startBounds.left + startBounds.width * 0.25, y: (startBounds.top + endBounds.top) / 2 },
+                { x: startBounds.left + startBounds.width * 0.5, y: (startBounds.top + endBounds.top) / 2 },
+                { x: startBounds.left + startBounds.width * 0.75, y: (startBounds.top + endBounds.top) / 2 },
+                { x: endBounds.left + endBounds.width * 0.25, y: (startBounds.top + endBounds.top) / 2 }
+            ]
+        };
+
+        // Create and animate packet
+        const packet = document.createElement('div');
+        packet.classList.add('packet');
+        document.getElementById('network-diagram').appendChild(packet);
+
+        // Set initial position
+        packet.style.left = `${pathInfo.start.x - 6}px`;
+        packet.style.top = `${pathInfo.start.y - 6}px`;
+
+        // Animation variables
+        const totalDuration = 4000; // 4 seconds for complete animation
+        const checkpointInterval = totalDuration / 4; // Time between checkpoints
+        let startTime = null;
+
+        function animate(timestamp) {
+            if (!startTime) startTime = timestamp;
+            const progress = (timestamp - startTime) / totalDuration;
+
+            if (progress < 1) {
+                // Calculate current position
+                const currentPoint = calculateCurrentPoint(pathInfo, progress);
+                packet.style.left = `${currentPoint.x - 6}px`;
+                packet.style.top = `${currentPoint.y - 6}px`;
+
+                // Check for checkpoint crossings
+                const checkpointIndex = Math.floor(progress * 4);
+                if (checkpointIndex >= 0 && checkpointIndex < 4) {
+                    // Emit checkpoint reached event
+                    socket.emit('checkpoint_reached', {
+                        sender: data.sender,
+                        receiver: data.receiver,
+                        checkpoint: checkpointIndex + 1,
+                        messageId: data.messageId
+                    });
+                }
+
+                requestAnimationFrame(animate);
+            } else {
+                packet.remove();
+                // Animation complete - emit event
+                socket.emit('animation_complete', {
+                    sender: data.sender,
+                    receiver: data.receiver,
+                    messageId: data.messageId
+                });
+            }
+        }
+
+        requestAnimationFrame(animate);
+    }
+});
+
+        // Add event listener for hello packet acknowledgment
+        socket.on('hello_ack', function(data) {
+            if (data.receiver === currentNode) {
+                connectedStations.set(data.sender, 'connected');
+                console.log(`Received hello_ack from ${data.sender}`);
+                updateStationsList();
+                updateReceiverDropdown();
+            }
+        });
+        // Modify updateReceiverDropdown to update stations list
+        function updateReceiverDropdown() {
+            const receiverSelect = document.getElementById('receiver-select');
+            receiverSelect.innerHTML = '<option value="">Select destination</option>';
+            
+            // Add all stations except the current one
+            connectedStations.forEach((status, station) => {
+                if (station !== currentNode) {
+                    const option = new Option(station, station);
+                    // Add all stations but mark them as disabled if not connected
+                    option.disabled = (status !== 'connected');
+                    receiverSelect.add(option);
+                }
+            });
+        
+            // Debug log
+            console.log('Current stations:', Array.from(connectedStations.entries()));
+        }
+        
+        function sendHelloPacket() {
+            socket.emit('hello_packet', {
+                node: currentNode,
+                ip: currentNodeIP,
+                timestamp: new Date().toISOString()
+            });
+        }
+
+        function broadcastHelloPacket() {
+            console.log('Broadcasting hello packet');
+            pendingAcknowledgments.clear();
+            
+            // Set pending status for all stations except current one
+            connectedStations.forEach((status, station) => {
+                if (station !== currentNode) {
+                    pendingAcknowledgments.add(station);
+                    if (status !== 'connected') {
+                        connectedStations.set(station, 'pending');
+                    }
+                }
+            });
+        
+            socket.emit('hello_packet', {
+                node: currentNode,
+                ip: currentNodeIP,
+                timestamp: new Date().toISOString()
+            });
+        
+            updateStationsList();
+            updateReceiverDropdown();
+            
+            // Set timeout for acknowledgments
+            setTimeout(() => {
+                pendingAcknowledgments.forEach(station => {
+                    if (connectedStations.get(station) === 'pending') {
+                        connectedStations.set(station, 'disconnected');
+                    }
+                });
+                pendingAcknowledgments.clear();
+                updateStationsList();
+                updateReceiverDropdown();
+            }, 5000);
+        }
+        
+        function addMessageToLog(log) {
+            const logBody = document.getElementById('log-body');
+            const row = document.createElement('tr');
+            
+            row.innerHTML = `
+                <td>${log.timestamp}</td>
+                <td><span class="badge badge-primary">${log.sender}</span></td>
+                <td><span class="badge badge-primary">${log.receiver}</span></td>
+                <td>${log.message}</td>
+                <td>${getCheckpointStatus(log)}</td>
+            `;
+            
+            // Insert at the beginning of the table for newest first
+            logBody.insertBefore(row, logBody.firstChild);
+        }
+        
+
+        function getCheckpointStatus(log) {
+            const checkpoints = [
+                { id: 'cp1', checked: log.cp1 },
+                { id: 'cp2', checked: log.cp2 },
+                { id: 'cp3', checked: log.cp3 },
+                { id: 'cp4', checked: log.cp4 }
+            ];
+
+            return checkpoints
+                .map((cp, index) => `
+                    <span class="badge ${cp.checked ? 'badge-success' : 'badge-primary'}">
+                        CP${index + 1}
+                    </span>
+                `)
+                .join(' ');
+        }
+
+        function autoSelectNode(clientIP) {
+            for (const [stationId, ip] of nodeIPMap) {
+                if (ip === clientIP) {
+                    document.getElementById('node-select').value = stationId;
+                    joinRoom();
+                    break;
+                }
+            }
+        }
+
+        function sendMessage() {
+            const receiver = document.getElementById('receiver-select').value;
+            const message = document.getElementById('message-input').value;
+            
+            if (!message || !receiver) {
+                showNotification('Please select a destination and enter a message', 'error');
+                return;
+            }
+        
+            const messageId = Date.now().toString();
+            
+            // Reset UI
+            updateProgressBar(0);
+            resetCheckpoints();
+        
+            // Emit start animation event
+            socket.emit('start_packet_animation', {
+                sender: currentNode,
+                receiver,
+                message,
+                messageId,
+                timestamp: new Date().toISOString()
+            });
+        }
+        socket.on('checkpoint_reached', (data) => {
+            if (data.sender === currentNode || data.receiver === currentNode) {
+                const progress = data.checkpoint * 25;
+                updateProgressBar(progress);
+                updateCheckpoint(data.checkpoint);
+            }
+        });
+        function formatTimestamp(timestamp) {
+            // Create date object from timestamp
+            const date = new Date(timestamp);
+            
+            // Format the date using Indian locale and IST timezone
+            return date.toLocaleString('en-IN', {
+                timeZone: 'Asia/Kolkata',
+                hour12: true,
+                year: 'numeric',
+                month: 'numeric',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+        }
+        
+        socket.on('animation_complete', (data) => {
+            if (data.sender === currentNode) {
+                // Complete the progress bar
+                updateProgressBar(100);
+                
+                // Send the actual message
+                socket.emit('send_message', {
+                    sender: currentNode,
+                    receiver: data.receiver,
+                    message: document.getElementById('message-input').value,
+                    ip: currentNodeIP,
+                    timestamp: new Date().toISOString(),
+                    cp1: true,
+                    cp2: true,
+                    cp3: true,
+                    cp4: true
+                });
+        
+                // Reset the form
+                document.getElementById('message-input').value = '';
+                showNotification('Message sent successfully');
+            }
+        })        
+        function updateProgressBar(progress) {
+            const progressBar = document.getElementById('progress-bar');
+            progressBar.style.width = `${progress}%`;
+        }
+
+        function updateCheckpoint(checkpointNum) {
+            const checkbox = document.getElementById(`cp${checkpointNum}`);
+            if (checkbox) {
+                checkbox.checked = true;
+            }
+        }        
+
+        function resetCheckpoints() {
+            for (let i = 1; i <= 4; i++) {
+                const checkbox = document.getElementById(`cp${i}`);
+                if (checkbox) {
+                    checkbox.checked = false;
+                }
+            }
+        }
+    </script>
+</body>
+</html>

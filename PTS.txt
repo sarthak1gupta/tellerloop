@@ -1,0 +1,55 @@
+PTS.txt
+
+Company: Tellercomm
+
+Notes:
+1. Reduce dependence of human for delivery
+2. Tube size is 110mm/160mm(4inches or 6inches)
+3. VFD is used in Side channel Blower
+4. Bottom channel introducer has a touch screen(Maybe through a phone or diff touch component) at that component
+5. PAss through system is a receiving end of the Carrier in the tube system
+6. Buffer is used in Imp situation. 
+7. 1 zone system is implemented in the project.
+8. The system is designed to be modular and scalable.
+9. 
+Functional req.
+1. Maintaince is imp.(velcro in the capsule, leaks in the tube,etc)
+2.  modular approach for the setup in a station 
+
+
+-----3 level in login for user.-----
+User access, Staff(master) access, Admin access
+
+Service and maintainence-----V.V.Imp
+
+Transportation model--in rescue mission in the hospital(mech topic)
+
+---------Subscripstion Based software
+
+
+
+Meet 2:(07-11-2024)
+->Only passthrought station is used for the entire project(Maybe a bottom loading station implemented later)
+->FOCUS on Passthrought station 
+->4 lateral sensors + 2 sensors on the pipe + 1 (Capacitive proximity sensor)(EC)
+->for Carrier diverter(there is a motor to rotate the tube)
+->Proximity Sensor(given one) is a temporary sensor.(EC)
+-> 7 floors(7 PassThrought station) are implemented in the present project
+->24V for the power supply
+->Pipes should be straight(ADD JOINTS to the pipes)
+CS:
+->Make to models to the components
+->Give to functionality for each component
+->Make real time simulation 
+->Buffer Component is ending point. will be added between stations 
+->Emergency Button to route the Imediate Item in the capsule 
+->One more DB for path;
+->Staff can see everything except path
+->Provide a zoom function in canvas and a Cartian plane(for diff floors and diff buildings(All Labeled)) in canvas
+->
+->
+
+
+
+
+

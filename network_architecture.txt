@@ -1,0 +1,15 @@
+Network Architecture Export
+===========================
+
+Components:
+1. side-channel-blower - Position: (638px, -320px)
+2. passthrough-station - Position: (507px, -125.5px)
+3. passthrough-station - Position: (644px, 102.5px)
+4. passthrough-station - Position: (526px, 302.5px)
+5. passthrough-station - Position: (647px, 489.5px)
+
+Connections:
+1. passthrough-station (bottom) → passthrough-station (top)
+2. side-channel-blower (bottom) → passthrough-station (top)
+3. passthrough-station (bottom) → passthrough-station (top)
+4. passthrough-station (bottom) → passthrough-station (top)

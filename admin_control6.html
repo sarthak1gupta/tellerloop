@@ -1,0 +1,1443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Network Topology and Electronic Flow Designer</title>
+    <style>
+        .container {
+            display: flex;
+            height: calc(100vh - 100px);
+            margin-top: 10px;
+        }
+
+        #left {
+            width: 250px;
+            padding: 10px;
+            border-right: 1px solid #ccc;
+            overflow-y: auto;
+        }
+
+        #right {
+            flex-grow: 1;
+            position: relative;
+            overflow: auto;
+            background: #f5f5f5;
+        }
+
+        .item {
+            border: 1px solid #999;
+            padding: 10px;
+            margin: 5px;
+            background: white;
+            cursor: grab;
+            position: relative;
+            user-select: none;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .item img {
+            width: 30px;
+            height: 30px;
+        }
+
+        .dragging {
+            opacity: 0.8;
+            cursor: grabbing !important;
+        }
+
+        .item.dragging {
+            opacity: 0.5;
+        }
+
+        .joint {
+            width: 12px;
+            height: 12px;
+            background: #666;
+            border-radius: 50%;
+            position: absolute;
+            cursor: pointer;
+            z-index: 100;
+        }
+
+        .joint:hover {
+            background: #999;
+        }
+
+        .joint.selected-joint {
+            background: #00f;
+        }
+
+        .joint.joint-active {
+            background: #0f0;
+        }
+
+        #connection-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 50;
+        }
+
+        .connection-path {
+            fill: none;
+            stroke-width: 2;
+            pointer-events: all;
+            cursor: pointer;
+        }
+
+        .connection-path.red-pipe {
+            stroke: red;
+        }
+
+        .connection-path.blue-pipe {
+            stroke: blue;
+        }
+
+        .packet {
+            position: absolute;
+            background: white;
+            border: 2px solid;
+            z-index: 1000;
+        }
+
+        .packet.red-pipe {
+            border-color: red;
+        }
+
+        .packet.blue-pipe {
+            border-color: blue;
+        }
+
+        .toolbar {
+            padding: 10px;
+            background: #f0f0f0;
+            border-bottom: 1px solid #ccc;
+        }
+
+        .pipe-button {
+            padding: 5px 10px;
+            margin: 0 5px;
+            cursor: pointer;
+        }
+
+        .pipe-button.active {
+            background: #ddd;
+        }
+
+        .simulation-dialog {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 20px;
+            border: 1px solid #ccc;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            z-index: 1000;
+        }
+
+        .simulation-dialog select {
+            margin: 10px 0;
+            width: 200px;
+        }
+
+        #zoom-controls {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: white;
+            padding: 5px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Design the Control Topology</h1>
+    <div id="toolbar">
+        <button id="clear">Clear Canvas</button>
+        <button id="save">Save Design</button>
+        <button id="load">Load Design</button>
+        <button id="connect">Connect Items</button>
+        <button id="undo">Undo</button>
+        <button id="redo">Redo</button>
+        <button id="export">Export as PNG</button>
+        <button id="redirect">LAN Monitoring Dashboard</button>
+    </div>
+    
+    <div class="container">
+        <div id="left">
+            <div class="item" draggable="true" data-type="mastercontrol">
+                <img src="{{ url_for('static', filename='MasterControl.png') }}" alt="Master Control">Master Control
+            </div>
+            <div class="item" draggable="true" data-type="passthroughstation">
+                <img src="{{ url_for('static', filename='PassthroughStation.png') }}" alt="Passthrough Station">Pass Through Station
+            </div>
+            <div class="item" draggable="true" data-type="bottomloadingstation">
+                <img src="{{ url_for('static', filename='BottomLoadingStation.png') }}" alt="Bottom Loading Station">Bottom Loading Station 
+            </div>
+            <div class="item" draggable="true" data-type="carrierdiverterwithtubing">
+                <img src="{{ url_for('static', filename='CarrierDiverterWithTubing.png') }}" alt="Carrier Diverter With Tubing">Carrier Diverter With Tubing
+            </div>
+            <div class="item" draggable="true" data-type="carrierdiverter">
+                <img src="{{ url_for('static', filename='CarrierDiverter.png') }}" alt="Carrier Diverter">Carrier Diverter
+            </div>
+            <div class="item" draggable="true" data-type="vfdcontroller">
+                <img src="{{ url_for('static', filename='VFDController.png') }}" alt="VFD Controller">VFD Controller
+            </div>
+            <div class="item" draggable="true" data-type="sidechannelblower">
+                <img src="{{ url_for('static', filename='SideChannelBlower.png') }}" alt="Side Channel Blower">Side Channel Blower
+            </div>
+        </div>
+        <div id="right"></div>
+    </div>
+    <div id="trash">
+        <img src="{{ url_for('static', filename='trash.png') }}" alt="Trash">
+    </div>
+    <div id="right">
+        <svg id="connection-layer"></svg>
+    </div>
+</div>
+    <div id="zoom-controls">
+        <button id="zoom-in">+</button>
+        <span id="zoom-level">100%</span>
+        <button id="zoom-out">-</button>
+    </div>
+    <div id="status-bar">Ready</div>
+    <div class="context-menu">
+        <ul>
+            <li id="delete-item">Delete Item</li>
+            <li id="rename-item">Rename Item</li>
+            <li id="change-color">Change Color</li>
+        </ul>
+    </div>
+    <script>
+        let currentX;
+        let currentY;
+        let xOffset = 0;
+        let yOffset = 0;
+        let firstConnectItem = null;
+        let undoStack = [];
+        let redoStack = [];
+        let joints = new Map(); // Store joints for each node
+        const state = {
+            selectedJoint: null,
+            isConnecting: false,
+            connections: new Map(),
+            currentZoom: 1,
+            isDragging: false,
+            draggedItem: null,
+            initialX: 0,
+            initialY: 0
+        };
+
+        let isSimulating = false;
+        let simulationInterval;
+        let selectedPipeType = 'red';
+        const leftBox = document.getElementById('left');
+        const rightBox = document.getElementById('right');
+        const trash = document.getElementById('trash');
+        const statusBar = document.getElementById('status-bar');
+        const contextMenu = document.querySelector('.context-menu');
+        const toolbar = document.getElementById('toolbar');
+        
+        
+
+        function adjustComponentSizes() {
+            document.querySelectorAll('#right .item').forEach((item) => {
+                // Apply scaling to each component based on the current zoom level
+                item.style.transform = `scale(${1 / currentZoom})`;
+                item.style.transformOrigin = 'top left';
+            });
+        }
+
+        function adjustCanvasSize() {
+    const items = document.querySelectorAll('#right .item');
+    let maxX = 0, maxY = 0;
+
+    // Calculate farthest points considering zoom
+    items.forEach(item => {
+        const itemRight = (item.offsetLeft + item.offsetWidth) / currentZoom;
+        const itemBottom = (item.offsetTop + item.offsetHeight) / currentZoom;
+        maxX = Math.max(maxX, itemRight);
+        maxY = Math.max(maxY, itemBottom);
+    });
+
+    rightBox.style.width = `${Math.max(window.innerWidth / currentZoom, maxX + 200)}px`;
+    rightBox.style.height = `${Math.max(window.innerHeight / currentZoom, maxY + 200)}px`;
+}
+ 
+        document.getElementById('redirect').addEventListener('click', () => {
+            window.location.href = "{{ url_for('index') }}";
+        });
+        
+        function dragStart(e) {
+            const target = e.target;
+            
+            // Don't initiate drag if clicking on a joint
+            if (target.classList.contains('joint')) {
+                return;
+            }
+            
+            const item = target.closest('.item');
+            if (!item) return;
+        
+            if (item.closest('#left')) {
+                draggedItem = item;
+                e.dataTransfer.setData('text/plain', item.dataset.type);
+            } else if (item.closest('#right')) {
+                e.preventDefault();
+                draggedItem = item;
+                
+                const rect = draggedItem.getBoundingClientRect();
+                initialX = e.clientX - rect.left;
+                initialY = e.clientY - rect.top;
+                
+                isDragging = true;
+                draggedItem.style.cursor = 'grabbing';
+                draggedItem.classList.add('dragging');
+            }
+            updateStatus('Dragging item...');
+        }
+        
+        function drag(e) {
+            if (!isDragging || !draggedItem) return;
+            e.preventDefault();
+        
+            const rightRect = rightBox.getBoundingClientRect();
+            
+            // Calculate mouse position relative to canvas, accounting for zoom and scroll
+            const mouseX = (e.clientX - rightRect.left + rightBox.scrollLeft) / currentZoom;
+            const mouseY = (e.clientY - rightRect.top + rightBox.scrollTop) / currentZoom;
+            
+            // Calculate new position accounting for initial click offset
+            const newX = mouseX - (initialX / currentZoom);
+            const newY = mouseY - (initialY / currentZoom);
+            
+            // Apply boundaries
+            const maxX = (rightBox.scrollWidth / currentZoom) - draggedItem.offsetWidth;
+            const maxY = (rightBox.scrollHeight / currentZoom) - draggedItem.offsetHeight;
+            
+            draggedItem.style.left = `${Math.max(0, Math.min(newX, maxX))}px`;
+            draggedItem.style.top = `${Math.max(0, Math.min(newY, maxY))}px`;
+            
+            updateConnections();
+            adjustCanvasSize();
+        }
+   
+        // Updated dragEnd function
+        function dragEnd(e) {
+            if (!draggedItem) return;
+            
+            isDragging = false;
+            draggedItem.style.cursor = 'grab';
+            draggedItem.classList.remove('dragging');
+            
+            // Final position update
+            if (draggedItem.closest('#right')) {
+                const rightRect = rightBox.getBoundingClientRect();
+                const finalX = Math.max(0, Math.min(parseInt(draggedItem.style.left), rightRect.width - draggedItem.offsetWidth));
+                const finalY = Math.max(0, Math.min(parseInt(draggedItem.style.top), rightRect.height - draggedItem.offsetHeight));
+                
+                draggedItem.style.left = `${finalX}px`;
+                draggedItem.style.top = `${finalY}px`;
+                
+                updateConnections();
+                saveState();
+            }
+            adjustCanvasSize();
+            draggedItem = null;
+            updateStatus('Item placed');
+            adjustComponentSizes(); // Adjust component size during dragging
+        }
+        
+        // Updated drop function for new items
+        function drop(e) {
+            e.preventDefault();
+            const componentType = e.dataTransfer.getData('text');
+            if (!componentType) return;
+        
+            const rightRect = rightBox.getBoundingClientRect();
+            const dropX = e.clientX - rightRect.left;
+            const dropY = e.clientY - rightRect.top;
+        
+            const component = document.querySelector(`[data-type="${componentType}"]`);
+            const newComponent = component.cloneNode(true);
+            
+            // Set up the new component
+            newComponent.style.position = 'absolute';
+            newComponent.style.left = `${dropX}px`;
+            newComponent.style.top = `${dropY}px`;
+            newComponent.style.cursor = 'grab';
+            newComponent.id = generateItemId();
+            
+            // Add joints to the component
+            const positions = ['top', 'right', 'bottom', 'left'];
+            positions.forEach((pos, index) => {
+                const joint = createJoint(newComponent.id, pos, index % 2 === 0 ? 'input' : 'output');
+                newComponent.appendChild(joint);
+            });
+            
+            addDragListeners(newComponent);
+            rightBox.appendChild(newComponent);
+            saveState();
+            updateStatus('New item added');
+        }
+        
+        // Function to add drag listeners to items
+        function addDragListeners(element) {
+            element.addEventListener('mousedown', dragStart);
+            element.addEventListener('touchstart', dragStart, { passive: false });
+        }
+
+        function initializeDragAndDrop() {
+            // Set up left panel components (draggable source items)
+            document.querySelectorAll('#left .item').forEach(item => {
+                item.setAttribute('draggable', 'true');
+                item.addEventListener('dragstart', handleDragStart);
+            });
+        
+            // Set up right panel (drop target and draggable components)
+            const rightBox = document.getElementById('right');
+            rightBox.addEventListener('dragover', handleDragOver);
+            rightBox.addEventListener('drop', handleDrop);
+            rightBox.addEventListener('mousedown', handleMouseDown);
+            document.addEventListener('mousemove', handleMouseMove);
+            document.addEventListener('mouseup', handleMouseUp);
+        }
+
+        function handleDragStart(e) {
+            // For new components from left panel
+            if (e.target.closest('#left')) {
+                e.dataTransfer.setData('text/plain', e.target.dataset.type);
+                return;
+            }
+            
+            // For existing components in right panel
+            const component = e.target.closest('.item');
+            if (!component || e.target.classList.contains('joint')) return;
+            
+            state.isDragging = true;
+            state.draggedItem = component;
+            
+            const rect = component.getBoundingClientRect();
+            state.initialX = e.clientX - rect.left;
+            state.initialY = e.clientY - rect.top;
+            
+            component.classList.add('dragging');
+            updateStatus('Dragging component...');
+        }
+        
+        function handleMouseDown(e) {
+            const component = e.target.closest('.item');
+            if (!component || e.target.classList.contains('joint')) return;
+            
+            e.preventDefault();
+            state.isDragging = true;
+            state.draggedItem = component;
+            
+            const rect = component.getBoundingClientRect();
+            state.initialX = e.clientX - rect.left;
+            state.initialY = e.clientY - rect.top;
+            
+            component.classList.add('dragging');
+            updateStatus('Moving component...');
+        }
+        
+        // Mouse move handler
+        function handleMouseMove(e) {
+            if (!state.isDragging || !state.draggedItem) return;
+            
+            e.preventDefault();
+            const rightBox = document.getElementById('right');
+            const rect = rightBox.getBoundingClientRect();
+            
+            // Calculate new position accounting for zoom and scroll
+            const mouseX = (e.clientX - rect.left + rightBox.scrollLeft) / state.currentZoom;
+            const mouseY = (e.clientY - rect.top + rightBox.scrollTop) / state.currentZoom;
+            
+            // Apply new position with boundaries
+            const newX = mouseX - (state.initialX / state.currentZoom);
+            const newY = mouseY - (state.initialY / state.currentZoom);
+            
+            const maxX = (rightBox.scrollWidth / state.currentZoom) - state.draggedItem.offsetWidth;
+            const maxY = (rightBox.scrollHeight / state.currentZoom) - state.draggedItem.offsetHeight;
+            
+            state.draggedItem.style.left = `${Math.max(0, Math.min(newX, maxX))}px`;
+            state.draggedItem.style.top = `${Math.max(0, Math.min(newY, maxY))}px`;
+            
+            // Update connections and canvas size
+            updateConnections();
+            adjustCanvasSize();
+        }
+        
+        // Mouse up / drag end handler
+        function handleMouseUp(e) {
+            if (!state.draggedItem) return;
+            
+            const component = state.draggedItem;
+            component.classList.remove('dragging');
+            
+            // Final position adjustments
+            if (component.closest('#right')) {
+                const rightBox = document.getElementById('right');
+                const rect = rightBox.getBoundingClientRect();
+                
+                const finalX = parseInt(component.style.left);
+                const finalY = parseInt(component.style.top);
+                
+                component.style.left = `${Math.max(0, finalX)}px`;
+                component.style.top = `${Math.max(0, finalY)}px`;
+                
+                updateConnections();
+                saveState();
+            }
+            
+            state.isDragging = false;
+            state.draggedItem = null;
+            updateStatus('Component placed');
+        }
+        
+        // Drag over handler
+        function handleDragOver(e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+        }
+        
+        // Drop handler for new components
+        function handleDrop(e) {
+            e.preventDefault();
+            const componentType = e.dataTransfer.getData('text/plain');
+            if (!componentType) return;
+            
+            const rightBox = document.getElementById('right');
+            const rect = rightBox.getBoundingClientRect();
+            
+            // Calculate drop position accounting for zoom
+            const dropX = (e.clientX - rect.left + rightBox.scrollLeft) / state.currentZoom;
+            const dropY = (e.clientY - rect.top + rightBox.scrollTop) / state.currentZoom;
+            
+            // Create and setup new component
+            const newComponent = createComponent(componentType, dropX, dropY);
+            rightBox.appendChild(newComponent);
+            
+            saveState();
+            updateStatus('New component added');
+        }
+
+        function handleDrag(e) {
+            if (!state.isDragging || !state.draggedItem) return;
+            
+            const containerRect = rightBox.getBoundingClientRect();
+            const mouseX = (e.clientX - containerRect.left + rightBox.scrollLeft) / state.currentZoom;
+            const mouseY = (e.clientY - containerRect.top + rightBox.scrollTop) / state.currentZoom;
+            
+            state.draggedItem.style.left = `${mouseX - state.initialX / state.currentZoom}px`;
+            state.draggedItem.style.top = `${mouseY - state.initialY / state.currentZoom}px`;
+            
+            updateConnections();
+        }
+        
+        function handleDragEnd() {
+            if (!state.draggedItem) return;
+            
+            state.isDragging = false;
+            state.draggedItem.style.cursor = 'grab';
+            state.draggedItem.classList.remove('dragging');
+            
+            updateConnections();
+            saveState();
+            
+            state.draggedItem = null;
+        }
+        
+        function createComponent(type, x, y) {
+            const component = document.createElement('div');
+            component.className = 'item';
+            component.id = `component-${Date.now()}`;
+            component.style.position = 'absolute';
+            component.style.left = `${x}px`;
+            component.style.top = `${y}px`;
+            
+            const img = document.createElement('img');
+            img.src = '/api/placeholder/30/30';
+            img.alt = type;
+            
+            const text = document.createElement('span');
+            text.textContent = type;
+            
+            component.appendChild(img);
+            component.appendChild(text);
+            
+            // Add joints
+            const positions = [
+                {angle: 0, label: 'top'},
+                {angle: 90, label: 'right'},
+                {angle: 180, label: 'bottom'},
+                {angle: 270, label: 'left'}
+            ];
+            
+            positions.forEach(pos => {
+                const joint = createJoint(component.id, pos.angle);
+                component.appendChild(joint);
+            });
+
+            rightBox.appendChild(component);
+            initializeComponent(component);
+            return component;
+        }
+        
+function pathToConnections(path) {
+    const connections = [];
+    for (let i = 0; i < path.length - 1; i++) {
+        const connId1 = `${path[i]}-to-${path[i + 1]}`;
+        const connId2 = `${path[i + 1]}-to-${path[i]}`;
+        const conn = document.getElementById(connId1) || document.getElementById(connId2);
+        if (conn) {
+            connections.push({
+                id: conn.id,
+                type: conn.dataset.pipeType || 'default'
+            });
+        }
+    }
+    return connections;
+}
+document.getElementById('toolbar').insertAdjacentHTML('beforeend', pipeControls);
+
+document.getElementById('red-pipe').addEventListener('click', () => {
+    selectedPipeType = 'red';
+    document.querySelectorAll('.pipe-button').forEach(btn => btn.classList.remove('active'));
+    document.getElementById('red-pipe').classList.add('active');
+});
+
+document.getElementById('blue-pipe').addEventListener('click', () => {
+    selectedPipeType = 'blue';
+    document.querySelectorAll('.pipe-button').forEach(btn => btn.classList.remove('active'));
+    document.getElementById('blue-pipe').classList.add('active');
+});
+
+  
+function connectItems(e) {
+    if (!isConnecting) {
+        isConnecting = true;
+        firstConnectItem = null;
+        document.getElementById('connect').textContent = 'Cancel Connection';
+        updateStatus(`Select first item to connect with ${selectedPipeType} pipe`);
+    } else {
+        isConnecting = false;
+        firstConnectItem = null;
+        document.getElementById('connect').textContent = 'Connect Items';
+        updateStatus('Connection cancelled');
+    }
+}
+document.getElementById('connect').addEventListener('click', () => {
+    state.isConnecting = !state.isConnecting;
+    const button = document.getElementById('connect');
+    button.textContent = state.isConnecting ? 'Cancel Connection' : 'Connect Items';
+    updateStatus(state.isConnecting ? 'Select first joint to connect' : 'Connection mode cancelled');
+});
+
+function createJoint(nodeId, angle) {
+    const joint = document.createElement('div');
+    joint.className = 'joint';
+    joint.dataset.nodeId = nodeId;
+    joint.dataset.angle = angle;
+    
+    const radius = 100; // Distance from center
+    const x = Math.cos(angle * Math.PI / 180) * radius;
+    const y = Math.sin(angle * Math.PI / 180) * radius;
+
+    joint.addEventListener('mousedown', handleJointMouseDown);
+    joint.addEventListener('mouseup', handleJointMouseUp);
+    joint.addEventListener('mouseover', () => joint.style.backgroundColor = '#999');
+    joint.addEventListener('mouseout', () => joint.style.backgroundColor = '#666');
+    
+    return joint;
+}
+function initializeComponent(component) {
+    // Create joints at various angles around the component
+    const angles = [0, 45, 90, 135, 180, 225, 270, 315];
+    angles.forEach(angle => {
+        const joint = createJoint(component.id, angle);
+        component.appendChild(joint);
+    });
+}
+
+function updateJointPosition(joint) {
+    const node = document.getElementById(joint.dataset.nodeId);
+    const position = joint.dataset.position;
+    const nodeRect = node.getBoundingClientRect();
+    
+    switch(position) {
+        case 'top':
+            joint.style.left = '50%';
+            joint.style.top = '-6px';
+            joint.style.transform = 'translateX(-50%)';
+            break;
+        case 'right':
+            joint.style.left = '100%';
+            joint.style.top = '50%';
+            joint.style.transform = 'translate(0, -50%)';
+            break;
+        case 'bottom':
+            joint.style.left = '50%';
+            joint.style.bottom = '-6px';
+            joint.style.transform = 'translateX(-50%)';
+            break;
+        case 'left':
+            joint.style.left = '-6px';
+            joint.style.top = '50%';
+            joint.style.transform = 'translate(-50%, -50%)';
+            break;
+    }
+}
+
+function jointMouseDown(e) {
+    e.stopPropagation();
+    if (isConnecting) {
+        if (!selectedJoint) {
+            selectedJoint = e.target;
+            selectedJoint.classList.add('selected-joint');
+            updateStatus('Select target joint to complete connection');
+        } else if (selectedJoint !== e.target) {
+            createConnection(selectedJoint, e.target);
+        }
+    }
+}
+
+function jointMouseUp(e) {
+    e.stopPropagation();
+    if (selectedJoint && selectedJoint !== e.target) {
+        createConnection(selectedJoint, e.target);
+    }
+}
+
+function createConnection(startJoint, endJoint) {
+    if (startJoint.dataset.nodeId === endJoint.dataset.nodeId) {
+        showToast('Cannot connect joints on the same component');
+        return false;
+    }
+    
+    const connectionId = `${startJoint.dataset.nodeId}-${startJoint.dataset.angle}-to-${endJoint.dataset.nodeId}-${endJoint.dataset.angle}`;
+    
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute('class', `connection-path ${selectedPipeType}-pipe`);
+    path.setAttribute('id', connectionId);
+    path.dataset.startJoint = `${startJoint.dataset.nodeId}-${startJoint.dataset.angle}`;
+    path.dataset.endJoint = `${endJoint.dataset.nodeId}-${endJoint.dataset.angle}`;
+    path.dataset.pipeType = selectedPipeType;
+    
+    const svgContainer = document.getElementById('connection-layer');
+    svgContainer.appendChild(path);
+    
+    state.connections.set(connectionId, {
+        start: startJoint,
+        end: endJoint,
+        element: path
+    });
+    
+    updateConnections();
+    return true;
+}
+
+function resetConnectionState() {
+    if (selectedJoint) {
+        selectedJoint.classList.remove('selected-joint');
+    }
+    selectedJoint = null;
+    isConnecting = false;
+    document.getElementById('connect').textContent = 'Connect Items';
+    updateStatus('Connection completed');
+}
+
+// Modified updateConnections function for joint-based connections
+function updateConnections() {
+    state.connections.forEach((conn) => {
+        const { start, end, element } = conn;
+        const startRect = start.getBoundingClientRect();
+        const endRect = end.getBoundingClientRect();
+        const containerRect = rightBox.getBoundingClientRect();
+        
+        // Calculate control points for curved path
+        const startX = (startRect.left + startRect.width/2 - containerRect.left) / state.currentZoom;
+        const startY = (startRect.top + startRect.height/2 - containerRect.top) / state.currentZoom;
+        const endX = (endRect.left + endRect.width/2 - containerRect.left) / state.currentZoom;
+        const endY = (endRect.top + endRect.height/2 - containerRect.top) / state.currentZoom;
+        
+        const dx = endX - startX;
+        const dy = endY - startY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        // Create curved path
+        const controlPoint1X = startX + dx/3;
+        const controlPoint1Y = startY + dy/3;
+        const controlPoint2X = startX + dx*2/3;
+        const controlPoint2Y = startY + dy*2/3;
+        
+        const path = `M ${startX} ${startY} 
+                     C ${controlPoint1X} ${controlPoint1Y},
+                       ${controlPoint2X} ${controlPoint2Y},
+                       ${endX} ${endY}`;
+                       
+        element.setAttribute('d', path);
+    });
+}
+        function calculateConnectionOffset(startId, endId, pipeType) {
+            const connections = Array.from(document.querySelectorAll('.connection-line'))
+                .filter(conn => {
+                    const [connStart, connEnd] = conn.id.split('-to-');
+                    return (connStart === startId && connEnd === endId) || 
+                           (connStart === endId && connEnd === startId);
+                });
+            
+            if (connections.length <= 1) {
+                return { startOffset: 0, endOffset: 0 };
+            }
+            
+            // Find position of current connection in parallel set
+            const connectionIndex = connections.findIndex(conn => 
+                conn.dataset.pipeType === pipeType && 
+                conn.id === `${startId}-to-${endId}`
+            );
+            
+            // Calculate offset based on position and total parallel connections
+            const baseOffset = 0.5;
+            const totalConnections = connections.length;
+            const offset = baseOffset * (connectionIndex - (totalConnections - 1) / 2);
+            
+            return {
+                startOffset: offset,
+                endOffset: offset
+            };
+        }
+        // 3. Improve simulation with proper node names and zoom handling
+        function animateFlow(pathInfo) {
+            if (!pathInfo || !pathInfo.connections.length) return;
+            
+            const packet = document.createElement('div');
+            packet.className = `packet ${pathInfo.connections[0].type}-pipe`;
+            packet.style.cssText = `
+                position: absolute;
+                width: ${10 / state.currentZoom}px;
+                height: ${10 / state.currentZoom}px;
+                border-radius: 50%;
+                pointer-events: none;
+                z-index: 1000;
+            `;
+            
+            rightBox.appendChild(packet);
+            
+            async function animate() {
+                if (!isSimulating) {
+                    packet.remove();
+                    return;
+                }
+                
+                for (const connection of pathInfo.connections) {
+                    if (!isSimulating) break;
+                    
+                    const conn = state.connections.get(connection.id);
+                    if (conn) {
+                        await animatePacketAlongPath(conn.element, packet);
+                    }
+                }
+                
+                if (isSimulating) {
+                    setTimeout(animate, 1000);
+                } else {
+                    packet.remove();
+                }
+            }
+            
+            animate();
+        }
+        
+        // Initialize the system
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeZoomControls();
+            document.getElementById('start-simulation').addEventListener('click', startSimulation);
+            document.getElementById('stop-simulation').addEventListener('click', stopSimulation);
+        });
+        // Helper function to show toast messages
+        function showToast(message) {
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        }
+
+        function getConnectionOffset(startId, endId, pipeType) {
+            const offset = 8; // Offset distance in pixels
+            const existingConnections = Array.from(document.querySelectorAll('.connection-line'))
+                .filter(conn => {
+                    const [connStart, connEnd] = conn.id.split('-to-');
+                    return (connStart === startId && connEnd === endId) || 
+                           (connStart === endId && connEnd === startId);
+                });
+            
+            const isReversePipe = existingConnections.some(conn => 
+                conn.dataset.pipeType !== pipeType && 
+                conn.id.split('-to-')[0] === startId
+            );
+            
+            return {
+                startOffset: isReversePipe ? offset : -offset,
+                endOffset: isReversePipe ? offset : -offset
+            };
+        }
+        
+        // Enhanced bidirectional simulation support
+        function buildDirectionalGraph() {
+            const graph = {};
+            
+            connections.forEach((conn, id) => {
+                const startNodeId = conn.start.dataset.nodeId;
+                const endNodeId = conn.end.dataset.nodeId;
+                const pipeType = conn.element.dataset.pipeType;
+                
+                if (!graph[startNodeId]) graph[startNodeId] = {};
+                if (!graph[endNodeId]) graph[endNodeId] = {};
+                
+                graph[startNodeId][endNodeId] = {
+                    direction: 'forward',
+                    type: pipeType,
+                    startJoint: conn.start,
+                    endJoint: conn.end,
+                    connectionId: id
+                };
+            });
+            
+            return graph;
+        }
+        
+        function findShortestPath(graph, startId, endId, preferredType = null) {
+            const distances = {};
+            const previous = {};
+            const unvisited = new Set();
+            const paths = {};
+            
+            // Initialize data structures
+            Object.keys(graph).forEach(node => {
+                distances[node] = Infinity;
+                previous[node] = null;
+                unvisited.add(node);
+                paths[node] = { path: [], pipeTypes: [] };
+            });
+            
+            distances[startId] = 0;
+            paths[startId] = { path: [startId], pipeTypes: [] };
+            
+            while (unvisited.size > 0) {
+                // Find current node with minimum distance
+                let current = Array.from(unvisited)
+                    .reduce((min, node) => 
+                        distances[node] < distances[min] ? node : min, 
+                        Array.from(unvisited)[0]
+                    );
+                    
+                if (current === endId || distances[current] === Infinity) break;
+                
+                unvisited.delete(current);
+                
+                // Check all neighbors
+                Object.entries(graph[current] || {}).forEach(([neighbor, connection]) => {
+                    if (!unvisited.has(neighbor)) return;
+                    
+                    // Add penalty for switching pipe types
+                    const typePenalty = preferredType && connection.type !== preferredType ? 10 : 0;
+                    const lastPipeType = paths[current].pipeTypes[paths[current].pipeTypes.length - 1];
+                    const switchPenalty = lastPipeType && lastPipeType !== connection.type ? 5 : 0;
+                    
+                    const distance = distances[current] + 1 + typePenalty + switchPenalty;
+                    
+                    if (distance < distances[neighbor]) {
+                        distances[neighbor] = distance;
+                        previous[neighbor] = current;
+                        
+                        // Update path and pipe types
+                        paths[neighbor] = {
+                            path: [...paths[current].path, neighbor],
+                            pipeTypes: [...paths[current].pipeTypes, connection.type]
+                        };
+                    }
+                });
+            }
+            
+            if (!paths[endId].path.length) return null;
+            
+            // Build connections list
+            const connections = [];
+            for (let i = 0; i < paths[endId].path.length - 1; i++) {
+                const from = paths[endId].path[i];
+                const to = paths[endId].path[i + 1];
+                connections.push({
+                    from,
+                    to,
+                    type: paths[endId].pipeTypes[i],
+                    id: `${from}-to-${to}`
+                });
+            }
+            
+            return {
+                path: paths[endId].path,
+                connections: connections
+            };
+        }
+
+        // Modified itemClick function to handle directional connections
+        function itemClick(e) {
+            if (isConnecting) {
+                const item = e.target.closest('.item');
+                if (item) {
+                    if (!firstConnectItem) {
+                        firstConnectItem = item;
+                        firstConnectItem.classList.add('connection-pending');
+                        updateStatus(`Select second item to connect with ${selectedPipeType} pipe`);
+                    } else if (firstConnectItem !== item) {
+                        firstConnectItem.classList.remove('connection-pending');                    
+                        
+                        // Create new connection
+                        const line = document.createElement('div');
+                        line.className = `connection-line ${selectedPipeType}-pipe`;
+                        line.id = `${firstConnectItem.id}-to-${item.id}`;
+                        line.dataset.pipeType = selectedPipeType;
+                        rightBox.appendChild(line);
+                        
+                        // Update visual state
+                        updateConnections();
+                        isConnecting = false;
+                        firstConnectItem = null;
+                        document.getElementById('connect').textContent = 'Connect Items';
+                        updateStatus(`Items connected with ${selectedPipeType} pipe`);
+                        saveState();
+                    }
+                }   
+            }
+        }
+        
+    // Add zoom functionality
+    let currentZoom = 1;
+    const zoomStep = 0.1;
+    const minZoom = 0.5;
+    const maxZoom = 2;
+
+    function updateZoom(newZoom) {
+        newZoom = Math.max(minZoom, Math.min(maxZoom, newZoom));
+        currentZoom = newZoom;
+    
+        // Update the container scale
+        rightBox.style.transform = `scale(${currentZoom})`;
+        rightBox.style.transformOrigin = 'top left';
+    
+        // Update zoom level display
+        document.getElementById('zoom-level').textContent = `${Math.round(currentZoom * 100)}%`;
+    
+        // Update connections and components
+        updateConnections();
+        adjustComponentSizes();
+    }
+
+    rightBox.addEventListener('wheel', (event) => {
+        if (event.ctrlKey) {
+            event.preventDefault();
+            const delta = event.deltaY > 0 ? -zoomStep : zoomStep;
+            const rect = rightBox.getBoundingClientRect();
+            const mouseX = event.clientX - rect.left;
+            const mouseY = event.clientY - rect.top;
+            
+            // Calculate new zoom level
+            const newZoom = Math.max(minZoom, Math.min(maxZoom, currentZoom + delta));
+            
+            // Apply zoom
+            updateZoom(newZoom);
+            
+            // Adjust scroll position to keep mouse point steady
+            const scrollX = (mouseX * newZoom / currentZoom) - mouseX;
+            const scrollY = (mouseY * newZoom / currentZoom) - mouseY;
+            rightBox.scrollLeft += scrollX;
+            rightBox.scrollTop += scrollY;
+        }
+    });
+    
+    document.getElementById('zoom-in').addEventListener('click', () => {
+        updateZoom(currentZoom + zoomStep);
+    });
+    
+    document.getElementById('zoom-out').addEventListener('click', () => {
+        updateZoom(currentZoom - zoomStep);
+    });
+
+function startSimulation() {
+    const simulationDialog = document.createElement('div');
+    simulationDialog.innerHTML = `
+        <div class="simulation-dialog">
+            <h3>Configure Simulation</h3>
+            <div>
+                <label>Start Node:</label>
+                <select id="sender-select">
+                    ${Array.from(document.querySelectorAll('#right .item')).map(item => 
+                        `<option value="${item.id}">${item.textContent.trim()}</option>`
+                    ).join('')}
+                </select>
+            </div>
+            <div>
+                <label>End Node:</label>
+                <select id="receiver-select">
+                    ${Array.from(document.querySelectorAll('#right .item')).map(item => 
+                        `<option value="${item.id}">${item.textContent.trim()}</option>`
+                    ).join('')}
+                </select>
+            </div>
+            <button id="start-flow">Start Flow</button>
+            <button id="cancel-simulation">Cancel</button>
+        </div>
+    `;
+    document.body.appendChild(simulationDialog);
+
+    document.getElementById('start-flow').addEventListener('click', () => {
+        const sender = document.getElementById('sender-select').value;
+        const receiver = document.getElementById('receiver-select').value;
+        const selectedType = document.querySelector('.pipe-button.active').id.split('-')[0];
+        
+        if (sender === receiver) {
+            alert('Start and end nodes cannot be the same!');
+            return;
+        }
+        // Check if there are any connections at all
+        const connections = document.querySelectorAll('.connection-line');
+        if (connections.length === 0) {
+            alert('No connections exist between nodes. Please create connections first.');
+            simulationDialog.remove();
+            return;
+        }
+        
+        const graph = buildDirectionalGraph();
+        const pathInfo = findShortestPath(graph, sender, receiver, selectedType);
+        
+        if (!pathInfo) {
+            alert('No valid path found between selected nodes!');
+            return;
+        }
+        
+        // Log the path information
+        console.log('Simulation Path Information:');
+        console.log('Start Node:', sender);
+        console.log('End Node:', receiver);
+        console.log('Path taken:', pathInfo.path);
+        console.log('Connections:', pathInfo.connections);
+        
+        isSimulating = true;
+        document.getElementById('start-simulation').style.display = 'none';
+        document.getElementById('stop-simulation').style.display = 'inline-block';
+        simulationDialog.remove();
+        
+        startFlow(pathInfo);
+    });
+
+    document.getElementById('cancel-simulation').addEventListener('click', () => {
+        simulationDialog.remove();
+    });
+}
+
+function movePacketBetweenJoints(startJoint, endJoint, connectionElem, pipeType, packet) {
+    return new Promise(resolve => {
+        const rightRect = rightBox.getBoundingClientRect();
+        const startRect = startJoint.getBoundingClientRect();
+        const endRect = endJoint.getBoundingClientRect();
+        
+        const startX = (startRect.left + startRect.width/2 - rightRect.left) / currentZoom;
+        const startY = (startRect.top + startRect.height/2 - rightRect.top) / currentZoom;
+        const endX = (endRect.left + endRect.width/2 - rightRect.left) / currentZoom;
+        const endY = (endRect.top + endRect.height/2 - rightRect.top) / currentZoom;
+        
+        packet.style.width = `${10 / currentZoom}px`;
+        packet.style.height = `${10 / currentZoom}px`;
+        packet.className = `packet ${pipeType}-pipe`;
+        
+        packet.style.transition = 'none';
+        packet.style.left = `${startX - (5 / currentZoom)}px`;
+        packet.style.top = `${startY - (5 / currentZoom)}px`;
+        
+        startJoint.classList.add('joint-active');
+        connectionElem.classList.add('active-flow');
+        
+        packet.offsetHeight;
+        
+        requestAnimationFrame(() => {
+            packet.style.transition = 'all 1s linear';
+            packet.style.left = `${endX - (5 / currentZoom)}px`;
+            packet.style.top = `${endY - (5 / currentZoom)}px`;
+        });
+        
+        setTimeout(() => {
+            startJoint.classList.remove('joint-active');
+            connectionElem.classList.remove('active-flow');
+            endJoint.classList.add('joint-active');
+            resolve();
+        }, 1000);
+    });
+}
+
+function stopSimulation() {
+    isSimulating = false;
+    document.querySelectorAll('.connection-line').forEach(line => {
+        line.classList.remove('active-flow');
+    });
+    document.querySelectorAll('.item').forEach(item => {
+        item.classList.remove('node-active');
+    });
+    document.querySelectorAll('.packet').forEach(packet => {
+        packet.remove();
+    });
+    document.getElementById('start-simulation').style.display = 'inline-block';
+    document.getElementById('stop-simulation').style.display = 'none';
+    updateStatus('Simulation stopped');
+}
+
+    function clearCanvas() {
+        if (confirm('Are you sure you want to clear the canvas? This action cannot be undone.')) {
+        rightBox.innerHTML = '';
+        saveState();
+        updateStatus('Canvas cleared');
+        }
+       }
+
+        function saveDesign() {
+          try {
+          const design = {
+                items: [],
+                    connections: []
+                };
+                document.querySelectorAll('#right .item').forEach(item => {
+                    design.items.push({
+                        type: item.dataset.type,
+                        left: item.style.left,
+                        top: item.style.top,
+                        id: item.id
+                    });
+                });
+                document.querySelectorAll('.connection-line').forEach(line => {
+                    design.connections.push(line.id);
+                });
+                localStorage.setItem('savedDesign', JSON.stringify(design));
+                updateStatus('Design saved successfully!');
+            } catch (error) {
+                console.error('Error saving design:', error);
+                updateStatus('Error saving design. Please try again.');
+            }
+        }
+
+        function loadDesign() {
+            try {
+                const savedDesign = localStorage.getItem('savedDesign');
+                if (savedDesign) {
+                    const design = JSON.parse(savedDesign);
+                    clearCanvas();
+                    design.items.forEach(item => {
+                        const newItem = document.querySelector(`[data-type="${item.type}"]`).cloneNode(true);
+                        newItem.style.position = 'absolute';
+                        newItem.style.left = item.left;
+                        newItem.style.top = item.top;
+                        newItem.id = item.id;
+                        rightBox.appendChild(newItem);
+                    });
+                    design.connections.forEach(connection => {
+                        const line = document.createElement('div');
+                        line.className = 'connection-line';
+                        line.id = connection;
+                        rightBox.appendChild(line);
+                    });
+                    updateConnections();
+                    saveState();
+                    updateStatus('Design loaded successfully!');
+                } else {
+                    updateStatus('No saved design found!');
+                }
+            } catch (error) {
+                console.error('Error loading design:', error);
+                updateStatus('Error loading design. Please try again.');
+            }
+        }
+
+        function updateStatus(message) {
+            document.getElementById('status-bar').textContent = message;
+        }
+
+        function saveState() {
+            const state = rightBox.innerHTML;
+            undoStack.push(state);
+            redoStack = [];
+        }
+
+        function undo() {
+            if (undoStack.length > 1) {
+                const currentState = undoStack.pop();
+                redoStack.push(currentState);
+                rightBox.innerHTML = undoStack[undoStack.length - 1];
+                updateConnections();
+                updateStatus('Undo successful');
+            } else {
+                updateStatus('Nothing to undo');
+            }
+        }
+
+        function redo() {
+            if (redoStack.length > 0) {
+                const nextState = redoStack.pop();
+                undoStack.push(nextState);
+                rightBox.innerHTML = nextState;
+                updateConnections();
+                updateStatus('Redo successful');
+            } else {
+                updateStatus('Nothing to redo');
+            }
+        }
+
+        function exportAsPNG() {
+            html2canvas(rightBox).then(canvas => {
+                const link = document.createElement('a');
+                link.download = 'network_topology.png';
+                link.href = canvas.toDataURL();
+                link.click();
+                updateStatus('Design exported as PNG');
+            });
+        }
+        let selectedItem = null;  // Global variable to store the selected item
+
+        function showContextMenu(e) {
+            e.preventDefault();
+            const item = e.target.closest('.item');
+            if (item) {
+                selectedItem = item;  // Store the selected item
+                contextMenu.style.display = 'block';
+                contextMenu.style.left = `${e.clientX}px`;
+                contextMenu.style.top = `${e.clientY}px`;
+            }
+        }
+
+        function hideContextMenu() {
+            contextMenu.style.display = 'none';
+            selectedItem = null;
+        }
+
+        document.getElementById('delete-item').addEventListener('click', () => {
+            deleteItem(selectedItem);
+        });
+        document.getElementById('rename-item').addEventListener('click', () => {
+            renameItem(selectedItem);
+        });
+        document.getElementById('change-color').addEventListener('click', () => {
+            changeItemColor(selectedItem);
+        });
+
+        // Updated deleteItem function
+        function deleteItem(item) {
+            if (item) {
+                item.remove();
+            
+                const connectionsToRemove = document.querySelectorAll(`.connection-line[id^="${item.id}-to-"], .connection-line[id$="-to-${item.id}"]`);
+                connectionsToRemove.forEach(conn => conn.remove());
+            
+                updateConnections();
+                saveState();
+                updateStatus('Item deleted');
+            } else {
+                updateStatus('No item selected for deletion');
+            }
+            hideContextMenu();
+        }
+        // Updated renameItem function
+        function renameItem(item) {
+            if (item) {
+                const currentName = item.textContent.trim();
+                const newName = prompt('Enter new name for the item:', currentName);
+            
+                if (newName && newName !== currentName) {
+                    item.lastChild.textContent = newName;
+                    saveState();
+                    updateStatus('Item renamed');
+                } else {
+                    updateStatus('Rename cancelled');
+                }
+            } else {
+                updateStatus('No item selected for renaming');
+            }
+            hideContextMenu();
+        }
+        // Updated changeItemColor function
+        function changeItemColor(item) {
+            if (item) {
+                const newColor = prompt('Enter new color (e.g., #FF0000 or red):', item.style.backgroundColor || '#ffffff');
+            
+                if (newColor) {
+                    try {
+                        item.style.backgroundColor = newColor;
+                        saveState();
+                        updateStatus('Item color changed');
+                    } catch (error) {
+                        updateStatus('Invalid color format');
+                    }
+                } else {
+                    updateStatus('Color change cancelled');
+                }
+            } else {
+                updateStatus('No item selected for color change');
+            }
+            hideContextMenu();
+        }
+        // Event listeners
+        rightBox.addEventListener('contextmenu', showContextMenu);
+        document.addEventListener('click', hideContextMenu);
+
+        function generateItemId() {
+            return `item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        }
+
+        // Event Listeners
+        leftBox.addEventListener('dragstart', dragStart);
+        rightBox.addEventListener('dragover', dragOver);
+        rightBox.addEventListener('drop', drop);
+        rightBox.addEventListener('dragend', dragEnd);
+        rightBox.addEventListener('mousedown', dragStart);
+        rightBox.addEventListener('mousemove', drag);
+        rightBox.addEventListener('mouseup', dragEnd);
+        rightBox.addEventListener('click', itemClick);
+        rightBox.addEventListener('contextmenu', showContextMenu);
+
+        document.addEventListener('click', hideContextMenu);
+
+        document.getElementById('clear').addEventListener('click', clearCanvas);
+        document.getElementById('save').addEventListener('click', saveDesign);
+        document.getElementById('load').addEventListener('click', loadDesign);
+        document.getElementById('connect').addEventListener('click', connectItems);
+        document.getElementById('undo').addEventListener('click', undo);
+        document.getElementById('redo').addEventListener('click', redo);
+        document.getElementById('export').addEventListener('click', exportAsPNG);
+
+        document.getElementById('delete-item').addEventListener('click', deleteItem);
+        document.getElementById('rename-item').addEventListener('click', renameItem);
+        document.getElementById('change-color').addEventListener('click', changeItemColor);
+
+        trash.addEventListener('dragover', dragOver);
+        trash.addEventListener('drop', (e) => {
+            e.preventDefault();
+            if (draggedItem) {
+                draggedItem.remove();
+                const connectionsToRemove = document.querySelectorAll(`.connection-line[id^="${draggedItem.id}-to-"], .connection-line[id$="-to-${draggedItem.id}"]`);
+                connectionsToRemove.forEach(conn => conn.remove());
+                updateConnections();
+                saveState();
+                updateStatus('Item deleted');
+            }
+        });
+        saveState();
+    </script>
+</body>
+</html>

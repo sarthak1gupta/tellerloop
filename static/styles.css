@@ -1,0 +1,170 @@
+body {
+    font-family: Arial, sans-serif;
+    background-color: #f4f4f4;
+    margin: 0;
+    padding: 20px;
+}
+
+h1, h2 {
+    color: #333;
+    text-align: center;
+}
+
+#user-form, #log-container, #message-form {
+    background-color: #fff;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    margin-bottom: 20px;
+}
+
+input[type="text"] {
+    padding: 10px;
+    margin-right: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+button {
+    padding: 10px 20px;
+    background-color: #007bff;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+button:hover {
+    background-color: #0056b3;
+}
+
+#log-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+}
+
+#log-table th, #log-table td {
+    padding: 12px;
+    text-align: left;
+    border-bottom: 1px solid #ddd;
+}
+
+#log-table th {
+    background-color: #f0f0f0;
+    color: #333;
+}
+
+#log-table tr:nth-child(even) {
+    background-color: #f9f9f9;
+}
+
+#progress-bar {
+    width: 100%;
+    background-color: #f3f3f3;
+    margin: 10px 0;
+}
+
+#progress-bar-fill {
+    width: 0;
+    height: 24px;
+    background-color: #4caf50;
+    text-align: center;
+    line-height: 24px;
+    color: white;
+}
+
+#log-table td label {
+    margin-right: 10px;
+}
+
+#log-table td input[type="checkbox"] {
+    margin-right: 5px;
+}
+
+.checkpoint:checked {
+    background-color: #4caf50;
+    color: #fff;
+}
+
+/* New Styles for Node Selection */
+#current-node {
+    font-size: 16px;
+    font-weight: bold;
+    margin-bottom: 10px;
+}
+
+#node-select {
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+    margin-bottom: 20px;
+    display: block; /* Ensure it takes the full width */
+}
+
+select {
+    padding: 10px;
+    border-radius: 5px;
+    border: 1px solid #ccc;
+    margin-top: 10px;
+}
+
+/* Basic styling for the message input */
+#message-input {
+    width: 70%;
+    padding: 10px;
+    border-radius: 5px;
+    border: 1px solid #ccc;
+}
+
+/* Basic styling for buttons */
+button {
+    padding: 10px 15px;
+    border: none;
+    border-radius: 5px;
+    background-color: #007bff;
+    color: white;
+    cursor: pointer;
+}
+
+button:hover {
+    background-color: #0056b3;
+}
+
+/* Basic styling for the progress bar */
+#progress-bar {
+    width: 100%;
+    background-color: #f3f3f3;
+    border-radius: 5px;
+    overflow: hidden;
+}
+
+#progress-bar-fill {
+    width: 0;
+    height: 20px;
+    background-color: #4caf50;
+    text-align: center;
+    line-height: 20px;
+    color: white;
+}
+
+/* Hide the logs by default */
+#log-container {
+    display: none;
+}
+
+#redirect {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    padding: 5px 10px;
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    cursor: pointer;
+    border-radius: 4px;
+}
+
