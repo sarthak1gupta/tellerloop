@@ -3,14 +3,12 @@ from flask_socketio import SocketIO, emit, join_room, leave_room, disconnect
 from flask_cors import CORS
 import sqlite3
 from datetime import datetime, timedelta, timezone
-from werkzeug.security import generate_password_hash, check_password_hash
+import hashlib
 import json
 import os, glob
-from datetime import datetime, timezone
 import threading
 import time
 from collections import defaultdict
-import ssl
 
 # Global variables for tracking
 heartbeat_threads = {}
@@ -25,19 +23,30 @@ ADMIN_USERS = ['admin1', 'admin2', 'admin3']
 REGULAR_USERS = ['user1', 'user2', 'user3']
 STAFF_USERS = ['staff1', 'staff2', 'staff3']
 
-# Create SSL context
-ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-ssl_context.minimum_version = ssl.TLSVersion.TLSv1_2
-
 app = Flask(__name__, static_folder="static", template_folder="templates")
-app.secret_key = os.urandom(24)  # Generate a secure random key
+app.secret_key = os.urandom(24)
 CORS(app, resources={r"/": {"origins": "*"}})
-socketio = SocketIO(app, 
-                   cors_allowed_origins="*", 
-                   async_mode='threading',
-                   ssl_context=ssl_context)
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 
 DATABASE = 'lan_monitoring.db'
+
+def generate_password_hash(password):
+    """Generate a secure hash of the password using SHA-256"""
+    salt = os.urandom(16).hex()
+    hash_obj = hashlib.sha256((password + salt).encode())
+    password_hash = hash_obj.hexdigest()
+    return f"sha256${salt}${password_hash}"
+
+def check_password_hash(stored_hash, provided_password):
+    """Verify the provided password against the stored hash"""
+    try:
+        method, salt, hashval = stored_hash.split('$')
+        if method != 'sha256':
+            return False
+        hash_obj = hashlib.sha256((provided_password + salt).encode())
+        return hash_obj.hexdigest() == hashval
+    except Exception:
+        return False
 
 def get_db():
     conn = sqlite3.connect(DATABASE)
@@ -70,7 +79,7 @@ def init_db():
                       checkpoint_count INTEGER NOT NULL,
                       UNIQUE(source, destination))''')
 
-        # Sample users with hashed passwords
+        # Sample users with new hashing method
         sample_users = [
             ('admin', generate_password_hash('admin_password'), 'admin'),
             ('user1', generate_password_hash('user1_password'), 'regular'),
@@ -81,86 +90,58 @@ def init_db():
         ]
 
         for username, hashed_password, role in sample_users:
-            db.execute("INSERT OR IGNORE INTO users (username, password, role) VALUES (?, ?, ?)", 
-                       (username.strip(), hashed_password, role.strip()))
+            try:
+                db.execute("INSERT OR REPLACE INTO users (username, password, role) VALUES (?, ?, ?)", 
+                          (username.strip(), hashed_password, role.strip()))
+            except sqlite3.Error as e:
+                print(f"Error inserting user {username}: {e}")
         
         db.commit()
-
-@app.route('/api/path_checkpoints')
-def get_path_checkpoints():
-    source = request.args.get('source')
-    destination = request.args.get('destination')
-    
-    if not source or not destination:
-        return jsonify({'error': 'Source and destination required'}), 400
-        
-    conn = get_db()
-    cur = conn.cursor()
-    
-    cur.execute('''
-        SELECT path, checkpoint_count
-        FROM path_checkpoints 
-        WHERE source = ? AND destination = ?
-    ''', (source, destination))
-    
-    result = cur.fetchone()
-    conn.close()
-    
-    if result:
-        return jsonify({
-            'path': result['path'].split(','),
-            'checkpoint_count': result['checkpoint_count']
-        })
-    
-    return jsonify({'error': 'Path not found'}), 404
 
 def authenticate_user(username, password):
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("SELECT * FROM users WHERE username = ?", (username.strip(),))
-    user = cur.fetchone()
-    conn.close()
-
-    if user:
-        print(f"User fetched from DB: {dict(user)}")
-        db_password = user['password']
-
-        # Use `check_password_hash` to compare the entered password with the hashed password
-        if check_password_hash(db_password, password):
-            print(f"Authentication successful for user: {username}")
+    try:
+        cur.execute("SELECT * FROM users WHERE username = ?", (username.strip(),))
+        user = cur.fetchone()
+        
+        if user and check_password_hash(user['password'], password):
             return user['role']
-        else:
-            print("Password mismatch")
-    else:
-        print("User not found in DB")
+    except sqlite3.Error as e:
+        print(f"Database error during authentication: {e}")
+    except Exception as e:
+        print(f"Authentication error: {e}")
+    finally:
+        conn.close()
     
     return None
 
 @app.route('/', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '')
 
-        # Debug statements
-        print(f"Received username: {username}")
-        print(f"Received password: {password}")
+        if not username or not password:
+            return render_template('login.html', error='Username and password are required')
 
-        user_role = authenticate_user(username, password)
+        try:
+            user_role = authenticate_user(username, password)
+            if user_role:
+                session['user'] = username
+                session['role'] = user_role
+                if user_role == 'admin':
+                    return redirect(url_for('admin_control'))
+                elif user_role == 'staff':
+                    return redirect(url_for('staff_monitoring'))
+                else:
+                    return redirect(url_for('index'))
+        except Exception as e:
+            print(f"Login error: {e}")
+            return render_template('login.html', error='An error occurred during login')
 
-        # Debug statement
-        print(f"User role fetched: {user_role}")
-        if user_role:
-            session['user'] = username
-            session['role'] = user_role
-            if user_role == 'admin':
-                return redirect(url_for('admin_control'))
-            elif user_role == 'staff':
-                return redirect(url_for('staff_monitoring'))
-            else:
-                return redirect(url_for('index'))
-        else:
-            return render_template('login.html', error='Invalid username or password')
+        return render_template('login.html', error='Invalid username or password')
+    
     return render_template('login.html')
 
 @app.route('/index')
@@ -533,22 +514,8 @@ def handle_animation_complete(data):
     }, broadcast=True)
 
 if __name__ == '__main__':
-    init_db()
-    
-    # Configure SSL context
-    if os.path.exists('cert.pem') and os.path.exists('key.pem'):
-        ssl_context.load_cert_chain('cert.pem', 'key.pem')
-        socketio.run(app, 
-                    host='0.0.0.0', 
-                    port=5000, 
-                    debug=True, 
-                    ssl_context=ssl_context,
-                    allow_unsafe_werkzeug=True)
-    else:
-        # Fallback to non-SSL for development
-        print("Warning: Running without SSL. Generate certificates for production use.")
-        socketio.run(app, 
-                    host='0.0.0.0', 
-                    port=5000, 
-                    debug=True,
-                    allow_unsafe_werkzeug=True)
+    try:
+        init_db()
+        socketio.run(app, host='0.0.0.0', port=5000, debug=True, allow_unsafe_werkzeug=True)
+    except Exception as e:
+        print(f"Server startup error: {e}")
